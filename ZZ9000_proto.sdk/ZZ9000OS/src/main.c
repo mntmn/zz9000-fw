@@ -530,6 +530,7 @@ void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
 #define MNT_BASE_BLIT_DST_LO 		MNT_REG_BASE+0x2e
 #define MNT_BASE_BLITTER_COLORMODE 	MNT_REG_BASE+0x30
 #define MNT_BASE_BLIT_SRC_PITCH		MNT_REG_BASE+0x32
+#define MNT_BASE_VBLANK_STATUS		MNT_REG_BASE+0x4C
 
 #define MNT_BASE_ETH_TX			MNT_REG_BASE+0x80
 #define MNT_BASE_ETH_RX			MNT_REG_BASE+0x82
@@ -1738,31 +1739,45 @@ int main() {
 				uint32_t data = 0;
 				uint32_t zaddr32 = zaddr & 0xffffffc;
 
-				if (zaddr32 == MNT_BASE_EVENT_SERIAL) {
-					data = (arm_app_output_event_serial << 16)
-							| arm_app_output_event_code;
-					arm_app_output_event_ack = 1;
-				} else if (zaddr32 == MNT_BASE_ETH_MAC_HI) {
-					uint8_t* mac = ethernet_get_mac_address_ptr();
-					data = mac[0] << 24 | mac[1] << 16 | mac[2] << 8 | mac[3];
-				} else if (zaddr32 == MNT_BASE_ETH_MAC_LO) {
-					uint8_t* mac = ethernet_get_mac_address_ptr();
-					data = mac[4] << 24 | mac[5] << 16;
-				} else if (zaddr32 == MNT_BASE_ETH_TX) {
-					// FIXME this is probably wrong (doesn't need swapping?)
-					data = (ethernet_send_result & 0xff) << 24
-							| (ethernet_send_result & 0xff00) << 16;
-				} else if (zaddr32 == MNT_BASE_FW_VERSION) {
-					data = (REVISION_MAJOR << 24 | REVISION_MINOR << 16);
-				} else if (zaddr32 == MNT_BASE_USB_STATUS) {
-					data = usb_status << 16;
-				} else if (zaddr32 == MNT_BASE_USB_CAPACITY) {
-					if (usb_storage_available) {
-						printf("[USB] query capacity: %lx\n",zz_usb_storage_capacity(0));
-						data = zz_usb_storage_capacity(0);
-					} else {
-						printf("[USB] query capacity: no device.\n");
-						data = 0;
+				switch (zaddr32) {
+					case MNT_BASE_VBLANK_STATUS:
+						data = (zstate_raw & (1 << 21));
+						break;
+					case MNT_BASE_EVENT_SERIAL:
+						data = (arm_app_output_event_serial << 16)
+								| arm_app_output_event_code;
+						arm_app_output_event_ack = 1;
+						break;
+					case MNT_BASE_ETH_MAC_HI: {
+						uint8_t* mac = ethernet_get_mac_address_ptr();
+						data = mac[0] << 24 | mac[1] << 16 | mac[2] << 8 | mac[3];
+						break;
+					}
+					case MNT_BASE_ETH_MAC_LO: {
+						uint8_t* mac = ethernet_get_mac_address_ptr();
+						data = mac[4] << 24 | mac[5] << 16;
+						break;
+					}
+					case MNT_BASE_ETH_TX:
+						// FIXME this is probably wrong (doesn't need swapping?)
+						data = (ethernet_send_result & 0xff) << 24
+								| (ethernet_send_result & 0xff00) << 16;
+						break;
+					case MNT_BASE_FW_VERSION:
+						data = (REVISION_MAJOR << 24 | REVISION_MINOR << 16);
+						break;
+					case MNT_BASE_USB_STATUS:
+						data = usb_status << 16;
+						break;
+					case MNT_BASE_USB_CAPACITY: {
+						if (usb_storage_available) {
+							printf("[USB] query capacity: %lx\n",zz_usb_storage_capacity(0));
+							data = zz_usb_storage_capacity(0);
+						} else {
+							printf("[USB] query capacity: no device.\n");
+							data = 0;
+						}
+						break;
 					}
 				}
 
