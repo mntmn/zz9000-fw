@@ -36,7 +36,9 @@
 #include "xgpiops.h"
 
 #include "xil_misc_psreset_api.h"
+
 #include "zz_regs.h"
+#include "zz_video_modes.h"
 
 typedef u8 uint8_t;
 
@@ -522,19 +524,7 @@ void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
 #define REVISION_MAJOR 1
 #define REVISION_MINOR 5
 
-#define ZZVMODE_1280x720		0
-#define ZZVMODE_800x600			1
-#define ZZVMODE_640x480			2
-#define ZZVMODE_1024x768		3
-#define ZZVMODE_1280x1024		4
-#define ZZVMODE_1920x1080_60 	5
-#define ZZVMODE_720x576			6 // 50hz
-#define ZZVMODE_1920x1080_50	7 // 50hz
-#define ZZVMODE_720x480			8
-#define ZZVMODE_640x512			9
-
 void video_mode_init(int mode, int scalemode, int colormode) {
-	int hres, vres, hmax, vmax, hstart, hend, vstart, vend, polarity, mhz, vhz, hdmi;
 	int hdiv = 1, vdiv = 1;
 
 	if (scalemode & 1)
@@ -547,159 +537,21 @@ void video_mode_init(int mode, int scalemode, int colormode) {
 	if (colormode == 1)
 		hdiv *= 2;
 
-	switch (mode) {
-	case ZZVMODE_1280x720:
-		hres = 1280;
-		vres = 720;
-		hstart = 1390;
-		hend = 1430;
-		hmax = 1650;
-		vstart = 725;
-		vend = 730;
-		vmax = 750;
-		polarity = 0;
-		mhz = 75;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_800x600:
-		hres = 800;
-		vres = 600;
-		hstart = 840;
-		hend = 968;
-		hmax = 1056;
-		vstart = 601;
-		vend = 605;
-		vmax = 628;
-		polarity = 0;
-		mhz = 40;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_640x480:
-		hres = 640;
-		vres = 480;
-		hstart = 656;
-		hend = 752;
-		hmax = 800;
-		vstart = 490;
-		vend = 492;
-		vmax = 525;
-		polarity = 0;
-		mhz = 25;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_640x512:
-		hres = 640;
-		vres = 512;
-		hstart = 840;
-		hend = 968;
-		hmax = 1056;
-		vstart = 601;
-		vend = 605;
-		vmax = 628;
-		polarity = 0;
-		mhz = 40;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_720x480:
-		hres = 720;
-		vres = 480;
-		hstart = 720;
-		hend = 752;
-		hmax = 800;
-		vstart = 490;
-		vend = 492;
-		vmax = 525;
-		polarity = 0;
-		mhz = 25;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_1024x768:
-		hres = 1024;
-		vres = 768;
-		hstart = 1048;
-		hend = 1184;
-		hmax = 1344;
-		vstart = 771;
-		vend = 777;
-		vmax = 806;
-		polarity = 0;
-		mhz = 65;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_1280x1024:
-		hres = 1280;
-		vres = 1024;
-		hstart = 1328;
-		hend = 1440;
-		hmax = 1688;
-		vstart = 1025;
-		vend = 1028;
-		vmax = 1066;
-		polarity = 0;
-		mhz = 108;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_1920x1080_50:
-		hres = 1920;
-		vres = 1080;
-		hstart = 2448;
-		hend = 2492;
-		hmax = 2640;
-		vstart = 1084;
-		vend = 1089;
-		vmax = 1125;
-		polarity = 0;
-		mhz = 150;
-		vhz = 50;
-		hdmi = 0;
-		break;
-	case ZZVMODE_1920x1080_60:
-		hres = 1920;
-		vres = 1080;
-		hstart = 2008;
-		hend = 2052;
-		hmax = 2200;
-		vstart = 1084;
-		vend = 1089;
-		vmax = 1125;
-		polarity = 0;
-		mhz = 150;
-		vhz = 50;
-		hdmi = 0;
-		break;
-	case ZZVMODE_720x576:
-		hres = 720;
-		vres = 576;
-		hstart = 732;
-		hend = 796;
-		hmax = 864;
-		vstart = 581;
-		vend = 586;
-		vmax = 625;
-		polarity = 1;
-		mhz = 27;
-		vhz = 50;
-		hdmi = 0;
-		break;
-	default:
-		printf("Error: unknown mode\n");
-		return;
-	}
+	struct zz_video_mode *vmode = &preset_video_modes[mode];
 
-	video_system_init(hres, vres, hmax, vmax, mhz, vhz, hdiv, vdiv, hdmi);
+	video_system_init(vmode->hres, vmode->vres, vmode->hmax,
+			vmode->vmax, vmode->mhz, vmode->vhz,
+			hdiv, vdiv, vmode->hdmi);
 
-	video_formatter_init(scalemode, colormode, hres, vres, hmax, vmax, hstart,
-			hend, vstart, vend, polarity);
+	video_formatter_init(scalemode, colormode,
+			vmode->hres, vmode->vres,
+			vmode->hmax, vmode->vmax,
+			vmode->hstart, vmode->hend,
+			vmode->vstart, vmode->vend,
+			vmode->polarity);
 
-	vmode_hsize = hres;
-	vmode_vsize = vres;
+	vmode_hsize = vmode->hres;
+	vmode_vsize = vmode->vres;
 	vmode_vdiv = vdiv;
 	vmode_hdiv = hdiv;
 }
