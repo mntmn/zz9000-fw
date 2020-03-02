@@ -21,8 +21,8 @@
 #include <math.h>
 #include "gfx.h"
 
-static uint32_t* fb=0;
-static uint32_t fb_pitch=0;
+uint32_t* fb=0;
+uint32_t fb_pitch=0;
 
 void set_fb(uint32_t* fb_, uint32_t pitch) {
 	fb=fb_;

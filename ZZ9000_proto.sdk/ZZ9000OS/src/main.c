@@ -198,6 +198,12 @@ static u32 blitter_dst_offset = 0;
 static u32 blitter_src_offset = 0;
 static u32 vmode_hsize = 800, vmode_vsize = 600, vmode_hdiv = 1, vmode_vdiv = 2;
 
+extern u32 fb_pitch;
+extern u32 *fb;
+
+//extern uint32_t* fb=0;
+//extern uint32_t fb_pitch=0;
+
 // 32bit: hdiv=1, 16bit: hdiv=2, 8bit: hdiv=4, ...
 int init_vdma(int hsize, int vsize, int hdiv, int vdiv) {
 	int status;
@@ -895,7 +901,7 @@ int main() {
 	uint16_t rect_y1 = 0;
 	uint16_t rect_y2 = 0;
 	uint16_t rect_y3 = 0;
-	uint16_t blitter_dst_pitch = 640;
+	uint16_t blitter_dst_pitch = 0;
 	uint32_t rect_rgb = 0;
 	uint32_t rect_rgb2 = 0;
 	uint32_t blitter_colormode = MNTVA_COLOR_32BIT;
@@ -1284,6 +1290,16 @@ int main() {
 								blitter_src_pitch);
 					}
 					
+					break;
+				}
+
+				case 0x50: { // Copy crap from scratch area
+					for (int i = 0; i < rect_y1; i++) {
+						memcpy	((uint32_t*) ((u32) framebuffer + framebuffer_pan_offset + (i * rect_x1)),
+								 (uint32_t*) ((u32)0x33F0000 + (i * rect_x1)),
+								 rect_x1);
+					}
+					Xil_DCacheFlush();
 					break;
 				}
 
