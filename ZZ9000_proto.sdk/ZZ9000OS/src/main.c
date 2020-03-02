@@ -370,42 +370,65 @@ void pixelclock_init(int mhz) {
 	u32 otherdiv = 11;
 
 	// Multiply/divide 100mhz fabric clock to desired pixel clock
-	if (mhz == 50) {
-		mul = 15;
-		div = 1;
-		otherdiv = 30;
-	} else if (mhz == 40) {
-		mul = 14;
-		div = 1;
-		otherdiv = 35;
-	} else if (mhz == 75) {
-		mul = 15;
-		div = 1;
-		otherdiv = 20;
-	} else if (mhz == 65) {
-		mul = 13;
-		div = 1;
-		otherdiv = 20;
-	} else if (mhz == 27) {
-		mul = 27;
-		div = 2;
-		otherdiv = 50;
-	}  else if (mhz == 54) {
-		mul = 27;
-		div = 1;
-		otherdiv = 50;
-	} else if (mhz == 150) {
-		mul = 15;
-		div = 1;
-		otherdiv = 10;
-	} else if (mhz == 25) { // 25.205
-		mul = 15;
-		div = 1;
-		otherdiv = 60;
-	} else if (mhz == 108) {
-		mul = 54;
-		div = 5;
-		otherdiv = 10;
+	// Max multiplier is 64
+	// Max div is 56
+	// Max otherdiv is 128
+	
+	switch (mhz) {
+		case 50: 
+			mul = 15;
+			div = 1;
+			otherdiv = 30;
+			break;
+		case 40:
+			mul = 14;
+			div = 1;
+			otherdiv = 35;
+			break;
+		case 75:
+			mul = 15;
+			div = 1;
+			otherdiv = 20;
+			break;
+		case 65:
+			mul = 13;
+			div = 1;
+			otherdiv = 20;
+			break;
+		case 27:
+			// Ever so slightly off from the exact PAL Amiga refresh rate, causes one
+			// frame tear every minute or two.
+			// 45 / 2 / 83  = 27.1084 MHz = 49.92 Hz
+			mul = 45;
+			div = 2;
+			otherdiv = 83;
+			// Slightly faster than the exact PAL Amiga refresh rate, causes one
+			// duplicated frame every ~45 seconds.
+			// 64 / 2 / 118 = 27.1186 MHz = 49.94 Hz
+			//mul = 45;
+			//div = 2;
+			//otherdiv = 83;
+			break;
+		case 54:
+			mul = 27;
+			div = 1;
+			otherdiv = 50;
+			break;
+		case 150:
+			mul = 15;
+			div = 1;
+			otherdiv = 10;
+			break;
+		case 25: // 25.205
+			mul = 15;
+			div = 1;
+			otherdiv = 60;
+			break;
+		case 108:
+			mul = 54;
+			div = 5;
+			otherdiv = 10;
+			break;
 	}
 
 	XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200, (mul << 8) | div);
@@ -504,7 +527,7 @@ void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
 	printf("...done.\n");
 
 	printf("hdmi_set_video_mode()...\n");
-	hdmi_set_video_mode(hres, vres, mhz, vhz, hdmi);
+	//hdmi_set_video_mode(hres, vres, mhz, vhz, hdmi);
 
 	printf("hdmi_ctrl_init()...\n");
 	hdmi_ctrl_init();
