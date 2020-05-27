@@ -132,24 +132,24 @@ module MNTZorro_v0_1_S00_AXI
    output reg m00_axi_bready,
   
    // read address channel
-   /*input wire m00_axi_arready,
-    output reg [C_M00_AXI_ID_WIDTH-1 : 0] m00_axi_arid,
-    output reg [C_M00_AXI_ADDR_WIDTH-1 : 0] m00_axi_araddr,
-    output reg [7 : 0] m00_axi_arlen,
-    output reg [2 : 0] m00_axi_arsize,
-    output reg [1 : 0] m00_axi_arburst,
-    output reg m00_axi_arlock,
-    output reg [3 : 0] m00_axi_arcache,
-    output reg [2 : 0] m00_axi_arprot,
-    output reg [3 : 0] m00_axi_arqos,
-    output reg m00_axi_arvalid,
+   input wire m00_axi_arready,
+//   output reg [C_M00_AXI_ID_WIDTH-1 : 0] m00_axi_arid,
+   output reg [`C_M00_AXI_ADDR_WIDTH-1 : 0] m00_axi_araddr,
+   output reg [7 : 0] m00_axi_arlen,
+   output reg [2 : 0] m00_axi_arsize,
+   output reg [1 : 0] m00_axi_arburst,
+   output reg m00_axi_arlock,
+   output reg [3 : 0] m00_axi_arcache,
+   output reg [2 : 0] m00_axi_arprot,
+   output reg [3 : 0] m00_axi_arqos,
+   output reg m00_axi_arvalid,
   
-    output reg m00_axi_rready,
-    input wire [C_M00_AXI_ID_WIDTH-1 : 0] m00_axi_rid,
-    input wire [C_M00_AXI_DATA_WIDTH-1 : 0] m00_axi_rdata,
-    input wire [1 : 0] m00_axi_rresp,
-    input wire m00_axi_rlast,
-    input wire m00_axi_rvalid,*/
+   output reg m00_axi_rready,
+//   input wire [C_M00_AXI_ID_WIDTH-1 : 0] m00_axi_rid,
+   input wire [`C_M00_AXI_DATA_WIDTH-1 : 0] m00_axi_rdata,
+   input wire [1 : 0] m00_axi_rresp,
+   input wire m00_axi_rlast,
+   input wire m00_axi_rvalid,
 
    // HP master interface 2 to write to PS memory directly (for videocap)
    input wire m01_axi_aclk,
@@ -883,6 +883,9 @@ module MNTZorro_v0_1_S00_AXI
   localparam Z3_WRITE_PRE2 = 51;
   localparam WAIT_WRITE_DMA_Z3B = 52;
   localparam WAIT_WRITE_DMA_Z3C = 53;
+  localparam WAIT_READ_DMA_Z3 = 54;
+  localparam WAIT_READ_DMA_Z3B = 55;
+  localparam WAIT_READ_DMA_Z3C = 56;
   
   (* mark_debug = "true" *) reg [7:0] zorro_state = COLD;
   reg zorro_idle = 0;
@@ -1138,6 +1141,15 @@ module MNTZorro_v0_1_S00_AXI
     m00_axi_awqos <= 'h0;
     m00_axi_wlast <= 'h1;
     m00_axi_bready <= 'h1;
+    
+    m00_axi_arlen <= 'h0;
+    m00_axi_arsize <= 'h2;
+    m00_axi_arburst <= 'h0;
+    m00_axi_arcache <= 'hF; //was 3
+    m00_axi_arlock <= 'h0;
+    m00_axi_arprot <= 'h0;
+    m00_axi_arqos <= 'h0;
+    m00_axi_rready <= 1;
     
     // FIXME this could use bursts
     m01_axi_awlen <= 'h0; // 1 burst (1 write)
@@ -1719,7 +1731,10 @@ module MNTZorro_v0_1_S00_AXI
               data_z3_low16 <= default_data;
               slaven <= 1;
               
-              zorro_state <= Z3_READ_UPPER;
+              if (z3_mapped_addr<'h10000 || videocap_mode)
+                zorro_state <= Z3_READ_UPPER;
+              else
+                zorro_state <= WAIT_READ_DMA_Z3;
             end else begin
               // address not recognized
               slaven <= 0;
@@ -1831,6 +1846,27 @@ module MNTZorro_v0_1_S00_AXI
           end
         end
         
+        WAIT_READ_DMA_Z3: begin
+          m00_axi_araddr  <= `ARM_MEMORY_START + (z3_mapped_addr/*&32'hfffffffc*/); // max 256MB
+          m00_axi_arvalid  <= 1;
+//          m00_axi_rready <= 1;
+          if (m00_axi_arready) begin
+            zorro_state <= WAIT_READ_DMA_Z3B;
+          end
+        end
+        
+        WAIT_READ_DMA_Z3B: begin
+          m00_axi_arvalid <= 0; 
+//          m00_axi_rready <= 1;
+          if (m00_axi_rvalid) begin
+            zorro_state <= Z3_ENDCYCLE;
+          data_z3_hi16 <= {m00_axi_rdata[7:0], m00_axi_rdata[15:8]};
+          data_z3_low16 <= {m00_axi_rdata[23:16], m00_axi_rdata[31:24]};
+          dataout_z3 <= 1; // enable data output
+          dtack <= 1;
+          end
+        end
+
         WAIT_WRITE_DMA_Z3: begin
           //z3_axi_write <= 1;
           
@@ -1845,6 +1881,7 @@ module MNTZorro_v0_1_S00_AXI
         end
         
         WAIT_WRITE_DMA_Z3B: begin
+          dtack <= 1;
           m00_axi_awvalid_z3 <= 0;
           m00_axi_wvalid_z3 <= 1;
           if (m00_axi_wready) begin
@@ -1861,7 +1898,7 @@ module MNTZorro_v0_1_S00_AXI
         Z3_ENDCYCLE: begin
           //z3_axi_write <= 0;
           dtack <= 1;
-          slaven <= 0;
+//          slaven <= 0;
 
           // we're timing out or own dtack here. because of a zorro
           // bug / subtlety, dtack can be sampled incorrectly to "hang over"
