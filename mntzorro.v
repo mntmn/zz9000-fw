@@ -1233,11 +1233,18 @@ module MNTZorro_v0_1_S00_AXI
     //videocap_x_sync <= videocap_x;
     videocap_y_sync2 <= videocap_y3;
     videocap_mode_sync <= videocap_mode;
-    
+
+`ifdef VARIANT_ZZ9500
     if (videocap_interlace)
       videocap_ymax_sync <= (videocap_ymax<<1)-(2*40);
     else
       videocap_ymax_sync <= videocap_ymax-36;
+`else
+    if (videocap_interlace)
+      videocap_ymax_sync <= (videocap_ymax<<1);
+    else
+      videocap_ymax_sync <= videocap_ymax;
+`endif
     
     // letterbox top and bottom to box out noisy lines
     if (videocap_y_sync2<videocap_ymax_sync && videocap_x_done) begin
@@ -1271,11 +1278,11 @@ module MNTZorro_v0_1_S00_AXI
         m01_axi_awvalid_out <= 0;
         m01_axi_wvalid_out  <= 1;
         if (m01_axi_wready) begin
-//`ifdef VARIANT_ZZ9500
+`ifdef VARIANT_ZZ9500
           if (videocap_save_x >= videocap_pitch-2) begin
-//`else
-//          if (videocap_save_x >= videocap_pitch) begin // 728 FIXME
-//`endif
+`else
+          if (videocap_save_x >= videocap_pitch) begin // 728 FIXME
+`endif
 
             videocap_save_line_done <= vc_saving_line;
             videocap_save_x <= 0;
