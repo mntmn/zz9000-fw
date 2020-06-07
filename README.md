@@ -16,7 +16,7 @@ The interesting bits:
 
 - `mntzorro.v` is the Zorro 2/3 interface and 24-bit video capture engine, AXI4-Lite interface
 - `video_formatter.v` is the AXI video stream formatter that reinterprets and controls an incoming 32-bit word stream as 8-bit palette indexed, 16-bit 565 or 24-bit RGBX pixels and outputs a 24-bit true color parallel RGB stream with horizontal and vertical sync
-- `zz9000-fw/ZZ9000_proto.sdk/ZZ9000Test/src`
+- `zz9000-fw/ZZ9000_proto.sdk/ZZ9000OS/src`
   - `main.c` is the main entrypoint of ZZ9000OS.elf which runs on the ARM core 0 and talks to `MNTZorro` and `video_formatter` in the FPGA fabric
   - `gfx.c` graphics acceleration routines, currently mainly rect fill and copy
   - `ethernet.c` low-level ethernet driver/framer
@@ -31,7 +31,7 @@ As Vivado projects are not suitable for version control, the Vivado project / bl
 Start Vivado from your terminal in tcl mode:
 
 ```
-source settings64.sh
+source /path/to/Xilinx/Vivado/2018.3/settings64.sh
 cd /place/where/you/checked/out/zz9000-firmware
 vivado -mode tcl
 ```
@@ -49,7 +49,7 @@ After a while you should be able to select "Run Synthesis" in Flow Navigator, an
 
 Your SDK workspace will start with the `zz9000_ps_wrapper_hw_platform_0` project.
 
-To recreate a project for ZZ9000OS, go to "File" / "New" / "Application Project". Enter "ZZ9000OS" as the Project name and click "Next". Select "Empty Application". Click "Finish". Right click "ZZ9000OS" in your Project Explorer and select "Import". Select "General" / "File System", click "Next". Select the `ZZ9000_proto.sdk` / `ZZ9000Test` subfolder in your `zz9000-firmware` folder. Check the checkmark next to "ZZ9000Test". Click Finish. Select "Yes to all" in the overwrite dialog. Now you will be able to build ZZ9000OS.
+To recreate a project for ZZ9000OS, go to "File" / "New" / "Application Project". Enter "ZZ9000OS" as the Project name and click "Next". Select "Empty Application". Click "Finish". Right click "ZZ9000OS" in your Project Explorer and select "Import". Select "General" / "File System", click "Next". Select the `ZZ9000_proto.sdk` / `ZZ9000OS` subfolder in your `zz9000-firmware` folder. Check the checkmark next to "ZZ9000OS". Click Finish. Select "Yes to all" in the overwrite dialog. Now you will be able to build ZZ9000OS.
 
 Before the next step, configure your BSP Project. Expand the ZZ9000OS_bsp node and double click `system.mss`. Click "Modify this BSP's Settings". Check `xilffs` in the Supported Libraries.
 
@@ -57,9 +57,9 @@ To recreate the bootloader project, go to "File" / "New" / "Application Project"
 
 # Building BOOT.bin
 
-The Eclipse-based Vivado SDK has a built-in tool (Menu "Xilinx" / "Create Boot Image") to generate the boot image `BOOT.bin`. To prepare, open `ZZ9000_proto.sdk/ZZ9000Test/bootimage/ZZ9000OS.bif` in a text editor and change the absolute paths to match the correct ELF files on your filesystem.
+The Eclipse-based Vivado SDK has a built-in tool (Menu "Xilinx" / "Create Boot Image") to generate the boot image `BOOT.bin`. To prepare, open `ZZ9000_proto.sdk/ZZ9000OS/bootimage/ZZ9000OS.bif` in a text editor and change the absolute paths to match the correct ELF files on your filesystem.
 
-In the "Create Boot Image" dialog, select "Import from existing BIF file" and select the definition file `ZZ9000_proto.sdk/ZZ9000Test/bootimage/ZZ9000OS.bif` and click "Create Image".
+In the "Create Boot Image" dialog, select "Import from existing BIF file" and select the definition file `ZZ9000_proto.sdk/ZZ9000OS/bootimage/ZZ9000OS.bif` and click "Create Image".
 
 `BOOT.bin` contains 3 files (“partitions”):
 
