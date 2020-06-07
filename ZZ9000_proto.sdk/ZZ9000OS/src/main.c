@@ -37,6 +37,9 @@
 
 #include "xil_misc_psreset_api.h"
 
+#include "zz_regs.h"
+#include "zz_video_modes.h"
+
 typedef u8 uint8_t;
 
 #define A9_CPU_RST_CTRL		(XSLCR_BASEADDR + 0x244)
@@ -194,6 +197,12 @@ static u32 framebuffer_pan_offset = 0;
 static u32 blitter_dst_offset = 0;
 static u32 blitter_src_offset = 0;
 static u32 vmode_hsize = 800, vmode_vsize = 600, vmode_hdiv = 1, vmode_vdiv = 2;
+
+extern u32 fb_pitch;
+extern u32 *fb;
+
+//extern uint32_t* fb=0;
+//extern uint32_t fb_pitch=0;
 
 // 32bit: hdiv=1, 16bit: hdiv=2, 8bit: hdiv=4, ...
 int init_vdma(int hsize, int vsize, int hdiv, int vdiv) {
@@ -367,42 +376,65 @@ void pixelclock_init(int mhz) {
 	u32 otherdiv = 11;
 
 	// Multiply/divide 100mhz fabric clock to desired pixel clock
-	if (mhz == 50) {
-		mul = 15;
-		div = 1;
-		otherdiv = 30;
-	} else if (mhz == 40) {
-		mul = 14;
-		div = 1;
-		otherdiv = 35;
-	} else if (mhz == 75) {
-		mul = 15;
-		div = 1;
-		otherdiv = 20;
-	} else if (mhz == 65) {
-		mul = 13;
-		div = 1;
-		otherdiv = 20;
-	} else if (mhz == 27) {
-		mul = 27;
-		div = 2;
-		otherdiv = 50;
-	}  else if (mhz == 54) {
-		mul = 27;
-		div = 1;
-		otherdiv = 50;
-	} else if (mhz == 150) {
-		mul = 15;
-		div = 1;
-		otherdiv = 10;
-	} else if (mhz == 25) { // 25.205
-		mul = 15;
-		div = 1;
-		otherdiv = 60;
-	} else if (mhz == 108) {
-		mul = 54;
-		div = 5;
-		otherdiv = 10;
+	// Max multiplier is 64
+	// Max div is 56
+	// Max otherdiv is 128
+	
+	switch (mhz) {
+		case 50: 
+			mul = 15;
+			div = 1;
+			otherdiv = 30;
+			break;
+		case 40:
+			mul = 14;
+			div = 1;
+			otherdiv = 35;
+			break;
+		case 75:
+			mul = 15;
+			div = 1;
+			otherdiv = 20;
+			break;
+		case 65:
+			mul = 13;
+			div = 1;
+			otherdiv = 20;
+			break;
+		case 27:
+			// Ever so slightly off from the exact PAL Amiga refresh rate, causes one
+			// frame tear every minute or two.
+			// 45 / 2 / 83  = 27.1084 MHz = 49.92 Hz
+			mul = 45;
+			div = 2;
+			otherdiv = 83;
+			// Slightly faster than the exact PAL Amiga refresh rate, causes one
+			// duplicated frame every ~45 seconds.
+			// 64 / 2 / 118 = 27.1186 MHz = 49.94 Hz
+			//mul = 45;
+			//div = 2;
+			//otherdiv = 83;
+			break;
+		case 54:
+			mul = 27;
+			div = 1;
+			otherdiv = 50;
+			break;
+		case 150:
+			mul = 15;
+			div = 1;
+			otherdiv = 10;
+			break;
+		case 25: // 25.205
+			mul = 15;
+			div = 1;
+			otherdiv = 60;
+			break;
+		case 108:
+			mul = 54;
+			div = 5;
+			otherdiv = 10;
+			break;
 	}
 
 	XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200, (mul << 8) | div);
@@ -501,7 +533,7 @@ void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
 	printf("...done.\n");
 
 	printf("hdmi_set_video_mode()...\n");
-	hdmi_set_video_mode(hres, vres, mhz, vhz, hdmi);
+	//hdmi_set_video_mode(hres, vres, mhz, vhz, hdmi);
 
 	printf("hdmi_ctrl_init()...\n");
 	hdmi_ctrl_init();
@@ -515,66 +547,13 @@ void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
 
 // Our address space is relative to the autoconfig base address (for example, it could be 0x600000)
 #define MNT_REG_BASE    			0x000000
+// Frame buffer/graphics memory starts at 64KB, leaving ample space for general purpose registers.
 #define MNT_FB_BASE     			0x010000
-#define MNT_BASE_MODE   			MNT_REG_BASE+0x02
-#define MNT_BASE_CONFIG   			MNT_REG_BASE+0x04
-#define MNT_BASE_SPRITEX			MNT_REG_BASE+0x06
-#define MNT_BASE_SPRITEY			MNT_REG_BASE+0x08
-#define MNT_BASE_PAN_HI 			MNT_REG_BASE+0x0a
-#define MNT_BASE_PAN_LO 			MNT_REG_BASE+0x0c
-#define MNT_BASE_VCAP_VMODE			MNT_REG_BASE+0x0e
-#define MNT_BASE_RECTOP 			MNT_REG_BASE+0x10
-#define MNT_BASE_BLIT_SRC_HI 		MNT_REG_BASE+0x28
-#define MNT_BASE_BLIT_SRC_LO 		MNT_REG_BASE+0x2a
-#define MNT_BASE_BLIT_DST_HI 		MNT_REG_BASE+0x2c
-#define MNT_BASE_BLIT_DST_LO 		MNT_REG_BASE+0x2e
-#define MNT_BASE_BLITTER_COLORMODE 	MNT_REG_BASE+0x30
-#define MNT_BASE_BLIT_SRC_PITCH		MNT_REG_BASE+0x32
-
-#define MNT_BASE_ETH_TX			MNT_REG_BASE+0x80
-#define MNT_BASE_ETH_RX			MNT_REG_BASE+0x82
-#define MNT_BASE_ETH_MAC_HI		MNT_REG_BASE+0x84
-#define MNT_BASE_ETH_MAC_HI2	MNT_REG_BASE+0x86
-#define MNT_BASE_ETH_MAC_LO		MNT_REG_BASE+0x88
-#define MNT_BASE_RUN_HI			MNT_REG_BASE+0x90
-#define MNT_BASE_RUN_LO			MNT_REG_BASE+0x92
-#define MNT_BASE_RUN_ARGC		MNT_REG_BASE+0x94
-#define MNT_BASE_RUN_ARG0		MNT_REG_BASE+0x96
-#define MNT_BASE_RUN_ARG1		MNT_REG_BASE+0x98
-#define MNT_BASE_RUN_ARG2		MNT_REG_BASE+0x9a
-#define MNT_BASE_RUN_ARG3		MNT_REG_BASE+0x9c
-#define MNT_BASE_RUN_ARG4		MNT_REG_BASE+0x9e
-#define MNT_BASE_RUN_ARG5		MNT_REG_BASE+0xa0
-#define MNT_BASE_RUN_ARG6		MNT_REG_BASE+0xa2
-#define MNT_BASE_RUN_ARG7   	MNT_REG_BASE+0xa4
-#define MNT_BASE_EVENT_SERIAL	MNT_REG_BASE+0xb0
-#define MNT_BASE_EVENT_CODE		MNT_REG_BASE+0xb2
-#define MNT_BASE_FW_VERSION		MNT_REG_BASE+0xc0
-#define MNT_BASE_USBBLK_TX_HI	MNT_REG_BASE+0xd0
-#define MNT_BASE_USBBLK_TX_LO	MNT_REG_BASE+0xd2
-#define MNT_BASE_USBBLK_RX_HI	MNT_REG_BASE+0xd4
-#define MNT_BASE_USBBLK_RX_LO	MNT_REG_BASE+0xd6
-#define MNT_BASE_USB_STATUS		MNT_REG_BASE+0xd8
-#define MNT_BASE_USB_BUFSEL		MNT_REG_BASE+0xda
-#define MNT_BASE_USB_CAPACITY   MNT_REG_BASE+0xdc
-#define MNT_BASE_DEBUG          MNT_REG_BASE+0xfc
 
 #define REVISION_MAJOR 1
 #define REVISION_MINOR 5
 
-#define ZZVMODE_1280x720		0
-#define ZZVMODE_800x600			1
-#define ZZVMODE_640x480			2
-#define ZZVMODE_1024x768		3
-#define ZZVMODE_1280x1024		4
-#define ZZVMODE_1920x1080_60 	5
-#define ZZVMODE_720x576			6 // 50hz
-#define ZZVMODE_1920x1080_50	7 // 50hz
-#define ZZVMODE_720x480			8
-#define ZZVMODE_640x512			9
-
 void video_mode_init(int mode, int scalemode, int colormode) {
-	int hres, vres, hmax, vmax, hstart, hend, vstart, vend, polarity, mhz, vhz, hdmi;
 	int hdiv = 1, vdiv = 1;
 
 	if (scalemode & 1)
@@ -587,159 +566,21 @@ void video_mode_init(int mode, int scalemode, int colormode) {
 	if (colormode == 1)
 		hdiv *= 2;
 
-	switch (mode) {
-	case ZZVMODE_1280x720:
-		hres = 1280;
-		vres = 720;
-		hstart = 1390;
-		hend = 1430;
-		hmax = 1650;
-		vstart = 725;
-		vend = 730;
-		vmax = 750;
-		polarity = 0;
-		mhz = 75;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_800x600:
-		hres = 800;
-		vres = 600;
-		hstart = 840;
-		hend = 968;
-		hmax = 1056;
-		vstart = 601;
-		vend = 605;
-		vmax = 628;
-		polarity = 0;
-		mhz = 40;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_640x480:
-		hres = 640;
-		vres = 480;
-		hstart = 656;
-		hend = 752;
-		hmax = 800;
-		vstart = 490;
-		vend = 492;
-		vmax = 525;
-		polarity = 0;
-		mhz = 25;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_640x512:
-		hres = 640;
-		vres = 512;
-		hstart = 840;
-		hend = 968;
-		hmax = 1056;
-		vstart = 601;
-		vend = 605;
-		vmax = 628;
-		polarity = 0;
-		mhz = 40;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_720x480:
-		hres = 720;
-		vres = 480;
-		hstart = 720;
-		hend = 752;
-		hmax = 800;
-		vstart = 490;
-		vend = 492;
-		vmax = 525;
-		polarity = 0;
-		mhz = 25;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_1024x768:
-		hres = 1024;
-		vres = 768;
-		hstart = 1048;
-		hend = 1184;
-		hmax = 1344;
-		vstart = 771;
-		vend = 777;
-		vmax = 806;
-		polarity = 0;
-		mhz = 65;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_1280x1024:
-		hres = 1280;
-		vres = 1024;
-		hstart = 1328;
-		hend = 1440;
-		hmax = 1688;
-		vstart = 1025;
-		vend = 1028;
-		vmax = 1066;
-		polarity = 0;
-		mhz = 108;
-		vhz = 60;
-		hdmi = 0;
-		break;
-	case ZZVMODE_1920x1080_50:
-		hres = 1920;
-		vres = 1080;
-		hstart = 2448;
-		hend = 2492;
-		hmax = 2640;
-		vstart = 1084;
-		vend = 1089;
-		vmax = 1125;
-		polarity = 0;
-		mhz = 150;
-		vhz = 50;
-		hdmi = 0;
-		break;
-	case ZZVMODE_1920x1080_60:
-		hres = 1920;
-		vres = 1080;
-		hstart = 2008;
-		hend = 2052;
-		hmax = 2200;
-		vstart = 1084;
-		vend = 1089;
-		vmax = 1125;
-		polarity = 0;
-		mhz = 150;
-		vhz = 50;
-		hdmi = 0;
-		break;
-	case ZZVMODE_720x576:
-		hres = 720;
-		vres = 576;
-		hstart = 732;
-		hend = 796;
-		hmax = 864;
-		vstart = 581;
-		vend = 586;
-		vmax = 625;
-		polarity = 1;
-		mhz = 27;
-		vhz = 50;
-		hdmi = 0;
-		break;
-	default:
-		printf("Error: unknown mode\n");
-		return;
-	}
+	struct zz_video_mode *vmode = &preset_video_modes[mode];
 
-	video_system_init(hres, vres, hmax, vmax, mhz, vhz, hdiv, vdiv, hdmi);
+	video_system_init(vmode->hres, vmode->vres, vmode->hmax,
+			vmode->vmax, vmode->mhz, vmode->vhz,
+			hdiv, vdiv, vmode->hdmi);
 
-	video_formatter_init(scalemode, colormode, hres, vres, hmax, vmax, hstart,
-			hend, vstart, vend, polarity);
+	video_formatter_init(scalemode, colormode,
+			vmode->hres, vmode->vres,
+			vmode->hmax, vmode->vmax,
+			vmode->hstart, vmode->hend,
+			vmode->vstart, vmode->vend,
+			vmode->polarity);
 
-	vmode_hsize = hres;
-	vmode_vsize = vres;
+	vmode_hsize = vmode->hres;
+	vmode_vsize = vmode->vres;
 	vmode_vdiv = vdiv;
 	vmode_hdiv = hdiv;
 }
@@ -1060,7 +901,7 @@ int main() {
 	uint16_t rect_y1 = 0;
 	uint16_t rect_y2 = 0;
 	uint16_t rect_y3 = 0;
-	uint16_t blitter_dst_pitch = 640;
+	uint16_t blitter_dst_pitch = 0;
 	uint32_t rect_rgb = 0;
 	uint32_t rect_rgb2 = 0;
 	uint32_t blitter_colormode = MNTVA_COLOR_32BIT;
@@ -1196,10 +1037,10 @@ int main() {
 
 				switch (zaddr) {
 				// Various blitter/video registers
-				case MNT_BASE_PAN_HI:
+				case REG_ZZ_PAN_HI:
 					framebuffer_pan_offset = zdata << 16;
 					break;
-				case MNT_BASE_PAN_LO:
+				case REG_ZZ_PAN_LO:
 					framebuffer_pan_offset |= zdata;
 
 					if (framebuffer_pan_offset != framebuffer_pan_offset_old) {
@@ -1209,27 +1050,27 @@ int main() {
 					}
 					break;
 
-				case MNT_BASE_BLIT_SRC_HI:
+				case REG_ZZ_BLIT_SRC_HI:
 					blitter_src_offset = zdata << 16;
 					break;
-				case MNT_BASE_BLIT_SRC_LO:
+				case REG_ZZ_BLIT_SRC_LO:
 					blitter_src_offset |= zdata;
 					break;
-				case MNT_BASE_BLIT_DST_HI:
+				case REG_ZZ_BLIT_DST_HI:
 					blitter_dst_offset = zdata << 16;
 					break;
-				case MNT_BASE_BLIT_DST_LO:
+				case REG_ZZ_BLIT_DST_LO:
 					blitter_dst_offset |= zdata;
 					break;
 
-				case MNT_BASE_BLITTER_COLORMODE:
+				case REG_ZZ_COLORMODE:
 					blitter_colormode = zdata;
 					break;
-				case MNT_BASE_CONFIG:
+				case REG_ZZ_CONFIG:
 					// enable/disable INT6, currently used to signal incoming ethernet packets
 					interrupt_enabled = zdata & 1;
 					break;
-				case MNT_BASE_MODE:
+				case REG_ZZ_MODE:
 					printf("mode change: %lx\n", zdata);
 
 					if (video_mode != zdata) {
@@ -1244,16 +1085,16 @@ int main() {
 					// remember selected video mode
 					video_mode = zdata;
 					break;
-				case MNT_BASE_VCAP_VMODE:
+				case REG_ZZ_VCAP_MODE:
 					printf("videocap default mode select: %lx\n", zdata);
 
 					videocap_video_mode = zdata &0xff;
 					break;
-				case MNT_BASE_SPRITEX:
-				case MNT_BASE_SPRITEY:
+				case REG_ZZ_SPRITE_X:
+				case REG_ZZ_SPRITE_Y:
 					if (!sprite_enabled)
 						break;
-					if (zaddr == MNT_BASE_SPRITEX) {
+					if (zaddr == REG_ZZ_SPRITE_X) {
 						// The "+#" offset at the end is dependent on implementation timing slack, and needs
 						// to be adjusted based on the sprite X offset produced by the current run.
 						sprite_x = (int16_t)zdata + sprite_x_offset + 3;
@@ -1288,7 +1129,7 @@ int main() {
 						video_formatter_write((sprite_y_adj << 16) | sprite_x_adj, MNTVF_OP_SPRITE_XY);
 					}
 					break;
-				case MNT_BASE_RECTOP + 0x38: { // SPRITE_BITMAP
+				case REG_ZZ_SPRITE_BITMAP: {
 					if (zdata == 1) { // Hardware sprite enabled
 						sprite_enabled = 1;
 						break;
@@ -1311,70 +1152,69 @@ int main() {
 					update_hw_sprite(bmp_data, sprite_colors, sprite_width, sprite_height);
 					break;
 				}
-				case MNT_BASE_RECTOP + 0x3a: { // SPRITE_COLORS
+				case REG_ZZ_SPRITE_COLORS: {
 					sprite_colors[zdata] = (blitter_user1 << 16) | blitter_user2;
 					if (sprite_colors[zdata] == 0xff00ff) sprite_colors[zdata] = 0xfe00fe;
 					break;
 				}
-				case MNT_BASE_BLIT_SRC_PITCH:
+				case REG_ZZ_SRC_PITCH:
 					blitter_src_pitch = zdata;
 					break;
 
-				case MNT_BASE_RECTOP:
+				case REG_ZZ_X1:
 					rect_x1 = zdata;
 					break;
-				case MNT_BASE_RECTOP + 2:
+				case REG_ZZ_Y1:
 					rect_y1 = zdata;
 					break;
-				case MNT_BASE_RECTOP + 4:
+				case REG_ZZ_X2:
 					rect_x2 = zdata;
 					break;
-				case MNT_BASE_RECTOP + 6:
+				case REG_ZZ_Y2:
 					rect_y2 = zdata;
 					break;
-				case MNT_BASE_RECTOP + 8:
+				case REG_ZZ_ROW_PITCH:
 					blitter_dst_pitch = zdata;
 					break;
-				case MNT_BASE_RECTOP + 0xa:
+				case REG_ZZ_X3:
 					rect_x3 = zdata;
 					break;
-				case MNT_BASE_RECTOP + 0xc:
+				case REG_ZZ_Y3:
 					rect_y3 = zdata;
 					break;
 
-				case MNT_BASE_RECTOP + 0x30:
+				case REG_ZZ_USER1:
 					blitter_user1 = zdata;
 					break;
-				case MNT_BASE_RECTOP + 0x32:
+				case REG_ZZ_USER2:
 					blitter_user2 = zdata;
 					break;
-				case MNT_BASE_RECTOP + 0x34:
+				case REG_ZZ_USER3:
 					blitter_user3 = zdata;
 					break;
-				case MNT_BASE_RECTOP + 0x36:
+				case REG_ZZ_USER4:
 					blitter_user4 = zdata;
 					break;
 
-				case MNT_BASE_RECTOP + 0xe:
+				case REG_ZZ_RGB_HI:
 					rect_rgb &= 0xffff0000;
 					rect_rgb |= (((zdata & 0xff) << 8) | zdata >> 8);
 					break;
-				case MNT_BASE_RECTOP + 0x10:
+				case REG_ZZ_RGB_LO:
 					rect_rgb &= 0x0000ffff;
 					rect_rgb |= (((zdata & 0xff) << 8) | zdata >> 8) << 16;
 					break;
-				case MNT_BASE_RECTOP + 0x24:
+				case REG_ZZ_RGB2_HI:
 					rect_rgb2 &= 0xffff0000;
 					rect_rgb2 |= (((zdata & 0xff) << 8) | zdata >> 8);
 					break;
-				case MNT_BASE_RECTOP + 0x26:
+				case REG_ZZ_RGB2_LO:
 					rect_rgb2 &= 0x0000ffff;
 					rect_rgb2 |= (((zdata & 0xff) << 8) | zdata >> 8) << 16;
 					break;
 
 				// RTG rendering
-				case MNT_BASE_RECTOP + 0x12:
-					// fill rectangle
+				case REG_ZZ_FILLRECT:
 					set_fb((uint32_t*) ((u32) framebuffer + blitter_dst_offset),
 							blitter_dst_pitch);
 					uint8_t mask = zdata;
@@ -1387,8 +1227,7 @@ int main() {
 								blitter_colormode, mask);
 					break;
 
-				case MNT_BASE_RECTOP + 0x14: {
-					// copy rectangle
+				case REG_ZZ_COPYRECT: {
 					set_fb((uint32_t*) ((u32) framebuffer + blitter_dst_offset),
 							blitter_dst_pitch);
 					mask = (blitter_colormode >> 8);
@@ -1420,7 +1259,7 @@ int main() {
 					break;
 				}
 
-				case MNT_BASE_RECTOP + 0x16: {
+				case REG_ZZ_FILLTEMPLATE: {
 					uint8_t draw_mode = blitter_colormode >> 8;
 					uint8_t* tmpl_data = (uint8_t*) ((u32) framebuffer
 							+ blitter_src_offset);
@@ -1454,8 +1293,17 @@ int main() {
 					break;
 				}
 
-				case MNT_BASE_RECTOP + 0x28: {
-					// Rect P2C
+				case 0x50: { // Copy crap from scratch area
+					for (int i = 0; i < rect_y1; i++) {
+						memcpy	((uint32_t*) ((u32) framebuffer + framebuffer_pan_offset + (i * rect_x1)),
+								 (uint32_t*) ((u32)0x33F0000 + (i * rect_x1)),
+								 rect_x1);
+					}
+					Xil_DCacheFlush();
+					break;
+				}
+
+				case REG_ZZ_P2C: {
 					uint8_t draw_mode = blitter_colormode >> 8;
 					uint8_t planes = (zdata & 0xFF00) >> 8;
 					uint8_t mask = (zdata & 0xFF);
@@ -1473,8 +1321,7 @@ int main() {
 					break;
 				}
 
-				case MNT_BASE_RECTOP + 0x2c: {
-					// Rect P2D
+				case REG_ZZ_P2D: {
 					uint8_t draw_mode = blitter_colormode >> 8;
 					uint8_t planes = (zdata & 0xFF00) >> 8;
 					uint8_t mask = (zdata & 0xFF);
@@ -1485,15 +1332,13 @@ int main() {
 
 					set_fb((uint32_t*) ((u32) framebuffer + blitter_dst_offset),
 							blitter_dst_pitch);
-
 					p2d_rect(rect_x1, 0, rect_x2, rect_y2, rect_x3,
 							rect_y3, num_rows, draw_mode, planes, mask, layer_mask, rect_rgb,
 							blitter_src_pitch, bmp_data, (blitter_colormode & 0x0F));
 					break;
 				}
 
-				case MNT_BASE_RECTOP + 0x2a: {
-					// DrawLine
+				case REG_ZZ_DRAWLINE: {
 					uint8_t draw_mode = blitter_colormode >> 8;
 					set_fb((uint32_t*) ((u32) framebuffer + blitter_dst_offset),
 							blitter_dst_pitch);
@@ -1513,48 +1358,46 @@ int main() {
 					break;
 				}
 
-				case MNT_BASE_RECTOP + 0x2e:
-					// InvertRect
+				case REG_ZZ_INVERTRECT:
 					set_fb((uint32_t*) ((u32) framebuffer + blitter_dst_offset),
 							blitter_dst_pitch);
-
 					invert_rect(rect_x1, rect_y1, rect_x2, rect_y2,
 							zdata & 0xFF, blitter_colormode);
 					break;
 
 				// Ethernet
-				case MNT_BASE_ETH_TX:
+				case REG_ZZ_ETH_TX:
 					ethernet_send_result = ethernet_send_frame(zdata);
 					//printf("SEND frame sz: %ld res: %d\n",zdata,ethernet_send_result);
 					break;
-				case MNT_BASE_ETH_RX:
+				case REG_ZZ_ETH_RX:
 					//printf("RECV eth frame sz: %ld\n",zdata);
 					ethernet_receive_frame();
 					break;
-				case MNT_BASE_ETH_MAC_HI: {
+				case REG_ZZ_ETH_MAC_HI: {
 					uint8_t* mac = ethernet_get_mac_address_ptr();
 					mac[0] = (zdata & 0xff00) >> 8;
 					mac[1] = (zdata & 0x00ff);
 					break;
 				}
-				case MNT_BASE_ETH_MAC_HI2: {
+				case REG_ZZ_ETH_MAC_HI2: {
 					uint8_t* mac = ethernet_get_mac_address_ptr();
 					mac[2] = (zdata & 0xff00) >> 8;
 					mac[3] = (zdata & 0x00ff);
 					break;
 				}
-				case MNT_BASE_ETH_MAC_LO: {
+				case REG_ZZ_ETH_MAC_LO: {
 					uint8_t* mac = ethernet_get_mac_address_ptr();
 					mac[4] = (zdata & 0xff00) >> 8;
 					mac[5] = (zdata & 0x00ff);
 					ethernet_update_mac_address();
 					break;
 				}
-				case MNT_BASE_USBBLK_TX_HI: {
+				case REG_ZZ_USBBLK_TX_HI: {
 					usb_storage_write_block = ((u32) zdata) << 16;
 					break;
 				}
-				case MNT_BASE_USBBLK_TX_LO: {
+				case REG_ZZ_USBBLK_TX_LO: {
 					usb_storage_write_block |= zdata;
 					if (usb_storage_available) {
 						usb_status = zz_usb_write_blocks(0, usb_storage_write_block, usb_read_write_num_blocks, (void*)USB_BLOCK_STORAGE_ADDRESS);
@@ -1563,11 +1406,11 @@ int main() {
 					}
 					break;
 				}
-				case MNT_BASE_USBBLK_RX_HI: {
+				case REG_ZZ_USBBLK_RX_HI: {
 					usb_storage_read_block = ((u32) zdata) << 16;
 					break;
 				}
-				case MNT_BASE_USBBLK_RX_LO: {
+				case REG_ZZ_USBBLK_RX_LO: {
 					usb_storage_read_block |= zdata;
 					if (usb_storage_available) {
 						usb_status = zz_usb_read_blocks(0, usb_storage_read_block, usb_read_write_num_blocks, (void*)USB_BLOCK_STORAGE_ADDRESS);
@@ -1576,7 +1419,7 @@ int main() {
 					}
 					break;
 				}
-				case MNT_BASE_USB_STATUS: {
+				case REG_ZZ_USB_STATUS: {
 					//printf("[USB] write to status/blocknum register: %d\n", zdata);
 					if (zdata==0) {
 						// reset USB
@@ -1588,21 +1431,21 @@ int main() {
 					}
 					break;
 				}
-				case MNT_BASE_USB_BUFSEL: {
+				case REG_ZZ_USB_BUFSEL: {
 					//printf("[USB] select buffer: %d\n", zdata);
 					usb_selected_buffer_block = zdata;
 					break;
 				}
-				case MNT_BASE_DEBUG: {
+				case REG_ZZ_DEBUG: {
 					debug_lowlevel = zdata;
 					break;
 				}
 
 				// ARM core 2 execution
-				case MNT_BASE_RUN_HI:
+				case REG_ZZ_ARM_RUN_HI:
 					arm_run_address = ((u32) zdata) << 16;
 					break;
-				case MNT_BASE_RUN_LO:
+				case REG_ZZ_ARM_RUN_LO:
 					// TODO checksum?
 					arm_run_address |= zdata;
 
@@ -1645,38 +1488,38 @@ int main() {
 					isb();
 					asm("sev");
 					break;
-				case MNT_BASE_RUN_ARGC:
+				case REG_ZZ_ARM_ARGC:
 					arm_run_env.argc = zdata;
 					break;
-				case MNT_BASE_RUN_ARG0:
+				case REG_ZZ_ARM_ARGV0:
 					arm_run_env.argv[0] = ((u32) zdata) << 16;
 					break;
-				case MNT_BASE_RUN_ARG1:
+				case REG_ZZ_ARM_ARGV1:
 					arm_run_env.argv[0] |= zdata;
 					printf("ARG0 set: %lx\n", arm_run_env.argv[0]);
 					break;
-				case MNT_BASE_RUN_ARG2:
+				case REG_ZZ_ARM_ARGV2:
 					arm_run_env.argv[1] = ((u32) zdata) << 16;
 					break;
-				case MNT_BASE_RUN_ARG3:
+				case REG_ZZ_ARM_ARGV3:
 					arm_run_env.argv[1] |= zdata;
 					printf("ARG1 set: %lx\n", arm_run_env.argv[1]);
 					break;
-				case MNT_BASE_RUN_ARG4:
+				case REG_ZZ_ARM_ARGV4:
 					arm_run_env.argv[2] = ((u32) zdata) << 16;
 					break;
-				case MNT_BASE_RUN_ARG5:
+				case REG_ZZ_ARM_ARGV5:
 					arm_run_env.argv[2] |= zdata;
 					printf("ARG2 set: %lx\n", arm_run_env.argv[2]);
 					break;
-				case MNT_BASE_RUN_ARG6:
+				case REG_ZZ_ARM_ARGV6:
 					arm_run_env.argv[3] = ((u32) zdata) << 16;
 					break;
-				case MNT_BASE_RUN_ARG7:
+				case REG_ZZ_ARM_ARGV7:
 					arm_run_env.argv[3] |= zdata;
 					printf("ARG3 set: %lx\n", arm_run_env.argv[3]);
 					break;
-				case MNT_BASE_EVENT_CODE:
+				case REG_ZZ_ARM_EV_CODE:
 					arm_app_input_event_code = zdata;
 					arm_app_input_event_serial++;
 					arm_app_input_event_ack = 0;
@@ -1738,31 +1581,45 @@ int main() {
 				uint32_t data = 0;
 				uint32_t zaddr32 = zaddr & 0xffffffc;
 
-				if (zaddr32 == MNT_BASE_EVENT_SERIAL) {
-					data = (arm_app_output_event_serial << 16)
-							| arm_app_output_event_code;
-					arm_app_output_event_ack = 1;
-				} else if (zaddr32 == MNT_BASE_ETH_MAC_HI) {
-					uint8_t* mac = ethernet_get_mac_address_ptr();
-					data = mac[0] << 24 | mac[1] << 16 | mac[2] << 8 | mac[3];
-				} else if (zaddr32 == MNT_BASE_ETH_MAC_LO) {
-					uint8_t* mac = ethernet_get_mac_address_ptr();
-					data = mac[4] << 24 | mac[5] << 16;
-				} else if (zaddr32 == MNT_BASE_ETH_TX) {
-					// FIXME this is probably wrong (doesn't need swapping?)
-					data = (ethernet_send_result & 0xff) << 24
-							| (ethernet_send_result & 0xff00) << 16;
-				} else if (zaddr32 == MNT_BASE_FW_VERSION) {
-					data = (REVISION_MAJOR << 24 | REVISION_MINOR << 16);
-				} else if (zaddr32 == MNT_BASE_USB_STATUS) {
-					data = usb_status << 16;
-				} else if (zaddr32 == MNT_BASE_USB_CAPACITY) {
-					if (usb_storage_available) {
-						printf("[USB] query capacity: %lx\n",zz_usb_storage_capacity(0));
-						data = zz_usb_storage_capacity(0);
-					} else {
-						printf("[USB] query capacity: no device.\n");
-						data = 0;
+				switch (zaddr32) {
+					case REG_ZZ_VBLANK_STATUS:
+						data = (zstate_raw & (1 << 21));
+						break;
+					case REG_ZZ_ARM_EV_SERIAL:
+						data = (arm_app_output_event_serial << 16)
+								| arm_app_output_event_code;
+						arm_app_output_event_ack = 1;
+						break;
+					case REG_ZZ_ETH_MAC_HI: {
+						uint8_t* mac = ethernet_get_mac_address_ptr();
+						data = mac[0] << 24 | mac[1] << 16 | mac[2] << 8 | mac[3];
+						break;
+					}
+					case REG_ZZ_ETH_MAC_LO: {
+						uint8_t* mac = ethernet_get_mac_address_ptr();
+						data = mac[4] << 24 | mac[5] << 16;
+						break;
+					}
+					case REG_ZZ_ETH_TX:
+						// FIXME this is probably wrong (doesn't need swapping?)
+						data = (ethernet_send_result & 0xff) << 24
+								| (ethernet_send_result & 0xff00) << 16;
+						break;
+					case REG_ZZ_FW_VERSION:
+						data = (REVISION_MAJOR << 24 | REVISION_MINOR << 16);
+						break;
+					case REG_ZZ_USB_STATUS:
+						data = usb_status << 16;
+						break;
+					case REG_ZZ_USB_CAPACITY: {
+						if (usb_storage_available) {
+							printf("[USB] query capacity: %lx\n",zz_usb_storage_capacity(0));
+							data = zz_usb_storage_capacity(0);
+						} else {
+							printf("[USB] query capacity: no device.\n");
+							data = 0;
+						}
+						break;
 					}
 				}
 

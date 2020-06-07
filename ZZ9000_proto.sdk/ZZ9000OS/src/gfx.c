@@ -21,8 +21,8 @@
 #include <math.h>
 #include "gfx.h"
 
-static uint32_t* fb=0;
-static uint32_t fb_pitch=0;
+uint32_t* fb=0;
+uint32_t fb_pitch=0;
 
 void set_fb(uint32_t* fb_, uint32_t pitch) {
 	fb=fb_;
@@ -755,6 +755,9 @@ void pattern_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y1
 	uint8_t u8_bg = bg_color >> 24;
 	uint8_t cur_byte = 0;
 
+	uint8_t cur_line = 0;
+	uint16_t cheat_y = 0;
+
 	tmpl_x = (x_offset / 8) % 2;
 	tmpl_data += (y_offset % loop_rows) * 2;
 	tmpl_x_base = tmpl_x;
@@ -828,9 +831,36 @@ void pattern_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y1
 				}
 				PATTERN_FILLRECT_LOOPX;
 			}
+			if (mask == 0xFF && loop_rows <= 64) {
+				cur_line++;
+				if (cur_line == loop_rows) {
+					cheat_y = y_line + 1;
+					goto engage_cheat_codes;
+				}
+			}
 			PATTERN_FILLRECT_LOOPY;
 		}
 
+		return;
+
+engage_cheat_codes:;
+		dp += (fb_pitch / 4);
+		uint32_t *sp = dp - (cur_line * (fb_pitch / 4));
+		for (uint16_t y_line = cheat_y; y_line < h; y_line++) {
+			switch (color_format) {
+				case MNTVA_COLOR_8BIT:
+					memcpy(&((uint8_t *)dp)[rect_x1], &((uint8_t *)sp)[rect_x1], w);
+					break;
+				case MNTVA_COLOR_16BIT565:
+					memcpy(&((uint16_t *)dp)[rect_x1], &((uint16_t *)sp)[rect_x1], w * 2);
+					break;
+				case MNTVA_COLOR_32BIT:
+					memcpy(&dp[rect_x1], &sp[rect_x1], w * 4);
+					break;
+			}
+			dp += fb_pitch / 4;
+			sp += fb_pitch / 4;
+		}
 		return;
 	}
 	else { // COMPLEMENT
