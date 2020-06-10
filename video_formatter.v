@@ -3,9 +3,9 @@
  * MNT ZZ9000 Amiga Graphics and Coprocessor Card Firmware
  * Video Stream Formatter
  *
- * Copyright (C) 2019, Lukas F. Hartmann <lukas@mntre.com>
- *                     MNT Research GmbH, Berlin
- *                     https://mntre.com
+ * Copyright (C) 2019-2020, Lukas F. Hartmann <lukas@mntre.com>
+ *                          MNT Research GmbH, Berlin
+ *                          https://mntre.com
  *
  * More Info: https://mntre.com/zz9000
  *
@@ -65,7 +65,7 @@ reg scale_x = 0;
 reg scale_y = 1; // amiga boots in 640x256, so double the resolution vertically
 reg [31:0] palette[255:0];
 reg [2:0] colormode = CMODE_32BIT;
-reg vsync_request = 0;
+reg vsync_request;
 reg sync_polarity = 1; // negative polarity
 
 reg [15:0] screen_h_max; //= 864;
@@ -75,24 +75,24 @@ reg [15:0] screen_h_sync_end; //= 796;
 reg [15:0] screen_v_sync_start; //= 581;
 reg [15:0] screen_v_sync_end; //= 586;
 
-localparam MAXWIDTH=1280; // 1920?!?
+localparam MAXWIDTH=1280;
 reg [31:0] line_buffer[MAXWIDTH-1:0];
 
 // (input) vdma state
-reg [3:0] next_input_state = 0;
-reg [11:0] inptr = 0;
-reg ready_for_vdma = 0;
+reg [3:0] next_input_state;
+reg [11:0] inptr;
+reg ready_for_vdma;
 
 assign m_axis_vid_tready = ready_for_vdma;
 
-reg [11:0] counter_x = 0; // vga domain
-reg [11:0] counter_y = 0; // vga domain
-reg [11:0] need_line_fetch = 0; // vga domain
+reg [11:0] counter_x; // vga domain
+reg [11:0] counter_y; // vga domain
+reg [11:0] need_line_fetch; // vga domain
 
-reg [11:0] need_line_fetch_reg = 0;
-reg [11:0] need_line_fetch_reg2 = 0;
-reg [11:0] need_line_fetch_reg3 = 0;
-reg [11:0] last_line_fetch = 1;
+reg [11:0] need_line_fetch_reg;
+reg [11:0] need_line_fetch_reg2;
+reg [11:0] need_line_fetch_reg3;
+reg [11:0] last_line_fetch;
 
 wire [31:0] pixin = m_axis_vid_tdata;
 wire pixin_valid = m_axis_vid_tvalid;
@@ -109,14 +109,14 @@ localparam SPRITE_W = 32;
 localparam SPRITE_H = 48;
 localparam SPRITE_SIZE = SPRITE_W*SPRITE_H;
 reg [23:0] sprite_buffer[SPRITE_SIZE-1:0];
-reg [11:0] sprite_addr_in = 0;
-reg [11:0] sprite_x = 0;
-reg [11:0] sprite_y = 0;
-reg [11:0] vga_sprite_x = 0; // vga domain
-reg [11:0] vga_sprite_y = 0; // vga domain
-reg [11:0] sprite_px = 0; // vga domain
+reg [11:0] sprite_addr_in;
+reg [11:0] sprite_x;
+reg [11:0] sprite_y;
+reg [11:0] vga_sprite_x; // vga domain
+reg [11:0] vga_sprite_y; // vga domain
+reg [11:0] sprite_px; // vga domain
 reg [23:0] sprite_pix; // vga domain
-reg sprite_on = 0; // vga domain
+reg sprite_on; // vga domain
 
 always @(posedge m_axis_vid_aclk)
   begin
@@ -142,13 +142,14 @@ always @(posedge m_axis_vid_aclk)
       else
         inptr <= inptr + 1'b1;
     end
-            
+
+    // one-hot encoded
     case (next_input_state)
       4'h0: begin
           // wait for start of frame
           ready_for_vdma <= 1;
           if (pixin_framestart)
-            next_input_state <= 4'h3;
+            next_input_state <= 4'h4;
         end
       4'h1: begin
           // reading from vdma
@@ -172,7 +173,7 @@ always @(posedge m_axis_vid_aclk)
             //ready_for_vdma <= 1; // from here
           end
         end
-      4'h3: begin
+      4'h4: begin
           // we are at frame start, wait for the first line of video output
           ready_for_vdma <= 0;
           
@@ -194,12 +195,9 @@ reg control_interlace_in2;
 // control input
 always @(posedge m_axis_vid_aclk)
 begin
-  control_op_in2        <= control_op;
-  control_op_in        <= control_op_in2;
-  control_data_in2      <= control_data;
-  control_data_in      <= control_data_in2;
-  control_interlace_in2 <= control_interlace;
-  control_interlace_in <= control_interlace_in2;
+  control_op_in        <= control_op;
+  control_data_in      <= control_data;
+  control_interlace_in <= control_interlace;
   
   if (next_input_state==0) begin
     vsync_request <= 0;
@@ -239,7 +237,7 @@ begin
         sync_polarity <= control_data_in[0];
       end
     OP_RESET: begin
-        /*sync_polarity <= 1;
+        sync_polarity <= 1;
         screen_h_max <= 864;
         screen_v_max <= 625;
         screen_h_sync_start <= 732;
@@ -250,7 +248,7 @@ begin
         scale_y <= 1;
         screen_width <= 720;
         screen_height <= 576;
-        colormode <= CMODE_32BIT;*/
+        colormode <= CMODE_32BIT;
       end
     OP_SPRITEXY: begin
         sprite_y <= control_data_in[31:16];
@@ -294,7 +292,7 @@ wire [7:0] red15   = {pixout16[4:0],   pixout16[4:2]};
 wire [7:0] green15 = {pixout16[9:5],   pixout16[9:7]};
 wire [7:0] blue15  = {pixout16[14:10], pixout16[14:12]};
 
-reg [3:0] counter_scanout_step; // = 0;
+reg [3:0] counter_scanout_step;
 reg [3:0] counter_subpixel = 0;
 
 reg vga_sync_polarity = 0;
