@@ -1098,15 +1098,15 @@ int main() {
 						// The "+#" offset at the end is dependent on implementation timing slack, and needs
 						// to be adjusted based on the sprite X offset produced by the current run.
 						sprite_x = (int16_t)zdata + sprite_x_offset + 3;
-						sprite_x_adj = sprite_x;
 						// horizontally doubled mode
-						if (scalemode&1) sprite_x*=2;
+						if (scalemode & 1) sprite_x *=2;
+						sprite_x_adj = sprite_x;
 					}
 					else {
-						sprite_y = (int16_t)zdata + sprite_y_offset;
-						sprite_y_adj = sprite_y;
+						sprite_y = (int16_t)zdata + sprite_y_offset + 1;
 						// vertically doubled mode
-						if (scalemode&2) sprite_y*=2;
+						if (scalemode & 2) sprite_y *= 2;
+						sprite_y_adj = sprite_y;
 
 						if (sprite_x < 0 || sprite_y < 0) {
 							if (sprite_clip_x != sprite_x || sprite_clip_y != sprite_y) {
