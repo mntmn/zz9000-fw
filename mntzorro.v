@@ -3,9 +3,11 @@
  * MNT ZZ9000 Amiga Graphics and Coprocessor Card Firmware
  * Zorro 2/3 AXI4-Lite Interface, 24-bit Video Capture (AXI DMA)
  *
- * Copyright (C) 2019, Lukas F. Hartmann <lukas@mntre.com>
- *                     MNT Research GmbH, Berlin
- *                     https://mntre.com
+ * Copyright (C) 2019-2020, Lukas F. Hartmann <lukas@mntre.com>
+ *                          MNT Research GmbH, Berlin
+ *                          https://mntre.com
+ *
+ * Contributors: _Bnu, shanshe
  *
  * More Info: https://mntre.com/zz9000
  *
@@ -112,46 +114,41 @@ module MNTZorro_v0_1_S00_AXI
    input wire m00_axi_aresetn,
    // write address channel
    input wire m00_axi_awready,
-   //output reg [C_M00_AXI_ID_WIDTH-1 : 0] m00_axi_awid,
    output wire [`C_M00_AXI_ADDR_WIDTH-1 : 0] m00_axi_awaddr,
-   output reg [7:0] m00_axi_awlen,
+   output reg [3:0] m00_axi_awlen,
    output reg [2:0] m00_axi_awsize,
    output reg [1:0] m00_axi_awburst,
    output reg m00_axi_awlock,
    output reg [3:0] m00_axi_awcache,
    output reg [2:0] m00_axi_awprot,
-   output reg [3:0] m00_axi_awqos,
+   //output reg [3:0] m00_axi_awqos,
    output wire m00_axi_awvalid,
   
    // write channel
    input wire m00_axi_wready,
-   //output reg [C_M00_AXI_ID_WIDTH-1 : 0] m00_axi_wid,
    output wire [`C_M00_AXI_DATA_WIDTH-1 : 0] m00_axi_wdata,
    output wire [`C_M00_AXI_DATA_WIDTH/8-1 : 0] m00_axi_wstrb,
    output reg m00_axi_wlast,
    output wire m00_axi_wvalid,
   
    // buffered write response channel
-   //input wire [C_M00_AXI_ID_WIDTH-1 : 0] m00_axi_bid,
    input wire [1 : 0] m00_axi_bresp,
    input wire m00_axi_bvalid,
    output reg m00_axi_bready,
   
    // read address channel
    input wire m00_axi_arready,
-//   output reg [C_M00_AXI_ID_WIDTH-1 : 0] m00_axi_arid,
    output reg [`C_M00_AXI_ADDR_WIDTH-1 : 0] m00_axi_araddr,
-   output reg [7 : 0] m00_axi_arlen,
+   output reg [3 : 0] m00_axi_arlen,
    output reg [2 : 0] m00_axi_arsize,
    output reg [1 : 0] m00_axi_arburst,
    output reg m00_axi_arlock,
    output reg [3 : 0] m00_axi_arcache,
    output reg [2 : 0] m00_axi_arprot,
-   output reg [3 : 0] m00_axi_arqos,
+   //output reg [3 : 0] m00_axi_arqos,
    output reg m00_axi_arvalid,
   
    output reg m00_axi_rready,
-//   input wire [C_M00_AXI_ID_WIDTH-1 : 0] m00_axi_rid,
    input wire [`C_M00_AXI_DATA_WIDTH-1 : 0] m00_axi_rdata,
    input wire [1 : 0] m00_axi_rresp,
    input wire m00_axi_rlast,
@@ -183,10 +180,10 @@ module MNTZorro_v0_1_S00_AXI
    output reg m01_axi_bready,
 
    // video_formatter control interface
-   output reg [31:0] video_control_data,
-   output reg [7:0]  video_control_op,
-   output reg video_control_interlace,
-   input wire video_control_vblank, 
+   output reg [31:0] video_control_data_out,
+   output reg [7:0]  video_control_op_out,
+   output reg video_control_interlace_out,
+   input wire video_control_vblank_in,
   
    // Xilinx AXI4-Lite implementation starts here ==============================
    
@@ -559,43 +556,43 @@ module MNTZorro_v0_1_S00_AXI
 
   // end of AXI-Lite interface ==================================================
   
-  (* mark_debug = "true" *) reg [4:0] znAS_sync  = 3'b11111;
-  (* mark_debug = "true" *) reg [2:0] znUDS_sync = 3'b000;
-  (* mark_debug = "true" *) reg [2:0] znLDS_sync = 3'b000;
-  (* mark_debug = "true" *) reg [2:0] zREAD_sync = 3'b000;
+  (* mark_debug = "true" *) reg [4:0] znAS_sync;
+  (* mark_debug = "true" *) reg [2:0] znUDS_sync;
+  (* mark_debug = "true" *) reg [2:0] znLDS_sync;
+  (* mark_debug = "true" *) reg [2:0] zREAD_sync;
   
-  (* mark_debug = "true" *) reg [2:0] znFCS_sync = 3'b111;
-  (* mark_debug = "true" *) reg [2:0] znDS1_sync = 3'b000;
-  (* mark_debug = "true" *) reg [2:0] znDS0_sync = 3'b000;
-  reg [1:0] znRST_sync = 2'b11;
-  (* mark_debug = "true" *) reg [1:0] zDOE_sync = 2'b00;
-  (* mark_debug = "true" *) reg [4:0] zE7M_sync = 5'b00000;
-  reg [2:0] znCFGIN_sync = 3'b000;
+  (* mark_debug = "true" *) reg [4:0] znFCS_sync;
+  (* mark_debug = "true" *) reg [2:0] znDS1_sync;
+  (* mark_debug = "true" *) reg [2:0] znDS0_sync;
+  reg [1:0] znRST_sync;
+  (* mark_debug = "true" *) reg [1:0] zDOE_sync;
+  (* mark_debug = "true" *) reg [4:0] zE7M_sync;
+  reg [2:0] znCFGIN_sync;
   
   (* mark_debug = "true" *) reg [23:0] zaddr; // zorro 2 address
   (* mark_debug = "true" *) reg [23:0] zaddr_sync;
   (* mark_debug = "true" *) reg [23:0] zaddr_sync2;
   (* mark_debug = "true" *) reg [15:0] zdata_in_sync;
   (* mark_debug = "true" *) reg [15:0] zdata_in_sync2;
-  reg z2_addr_valid = 0;
+  reg z2_addr_valid;
   reg [23:0] z2_mapped_addr;
-  reg z2_read = 0;
-  reg z2_write = 0;
-  reg z2_datastrobe_synced = 0;
-  reg z2addr_in_ram = 0;
-  reg z2addr_in_reg = 0;
-  reg z2addr_autoconfig = 0;
-  reg [31:0] ram_low = 32'h600000;
-  reg [31:0] ram_high = 32'ha00000;
-  reg [31:0] reg_low  = 32'h601000;
-  reg [31:0] reg_high = 32'h602000;
-  reg z2_uds = 0;
-  reg z2_lds = 0;
+  reg z2_read;
+  reg z2_write;
+  reg z2_datastrobe_synced;
+  reg z2addr_in_ram;
+  reg z2addr_in_reg;
+  reg z2addr_autoconfig;
+  reg [31:0] ram_low  ;//= 32'h600000;
+  reg [31:0] ram_high ;//= 32'ha00000;
+  reg [31:0] reg_low  ;//= 32'h601000;
+  reg [31:0] reg_high ;//= 32'h602000;
+  reg z2_uds;
+  reg z2_lds;
 
-  reg [31:0] z3_ram_low  = 32'h50000000;
-  reg [31:0] z3_ram_high = 32'h50000000 + `Z3_RAM_SIZE -4;
-  reg [31:0] z3_reg_low  = 32'h50001000;
-  reg [31:0] z3_reg_high = 32'h50002000;
+  reg [31:0] z3_ram_low  ;//= 32'h50000000;
+  reg [31:0] z3_ram_high ;//= 32'h50000000 + `Z3_RAM_SIZE -4;
+  reg [31:0] z3_reg_low  ;//= 32'h50001000;
+  reg [31:0] z3_reg_high ;//= 32'h50002000;
   reg [15:0] data_z3_hi16;
   reg [15:0] data_z3_low16;
   
@@ -608,39 +605,40 @@ module MNTZorro_v0_1_S00_AXI
   (* mark_debug = "true" *) reg [31:0] z3addr;
   (* mark_debug = "true" *) reg [31:0] last_z3addr;
   (* mark_debug = "true" *) reg [31:0] z3addr2;
+  (* mark_debug = "true" *) reg [31:0] z3addr3;
   reg [31:0] z3addr3;
   (* mark_debug = "true" *) reg [31:0] z3_mapped_addr;
   (* mark_debug = "true" *) reg [31:0] z3_read_addr;
   (* mark_debug = "true" *) reg [15:0] z3_read_data;
-  reg z3_din_latch = 0;
-  (* mark_debug = "true" *) reg z3_fcs_state = 1;
-  (* mark_debug = "true" *) reg z3_end_cycle = 0;
+  reg z3_din_latch;
+  (* mark_debug = "true" *) reg z3_fcs_state;
+  (* mark_debug = "true" *) reg z3_end_cycle;
   
-  (* mark_debug = "true" *) reg z3addr_in_ram = 0;
-  (* mark_debug = "true" *) reg z3addr_in_reg = 0;
-  (* mark_debug = "true" *) reg z3addr_autoconfig = 0;
+  (* mark_debug = "true" *) reg z3addr_in_ram;
+  (* mark_debug = "true" *) reg z3addr_in_reg;
+  (* mark_debug = "true" *) reg z3addr_autoconfig;
 
 `ifdef ZORRO3
   reg ZORRO3 = 1;
 `else
   reg ZORRO3 = 0;
 `endif
-  (* mark_debug = "true" *) reg dataout = 0;
-  (* mark_debug = "true" *) reg dataout_z3 = 0;
-  (* mark_debug = "true" *) reg dataout_enable = 0;
-  (* mark_debug = "true" *) reg slaven = 0;
-  (* mark_debug = "true" *) reg dtack = 0;
-  reg dtack_latched = 0;
+  (* mark_debug = "true" *) reg dataout;
+  (* mark_debug = "true" *) reg dataout_z3;
+  (* mark_debug = "true" *) reg dataout_enable;
+  (* mark_debug = "true" *) reg slaven;
+  (* mark_debug = "true" *) reg dtack;
 
-  reg z_reset = 0;
-  reg z_cfgin = 0;
-  reg z_cfgin_lo = 0;
-  reg z3_confdone = 0;
+  reg z_reset;
+  reg z_reset_delayed;
+  reg z_cfgin;
+  reg z_cfgin_lo;
+  reg z3_confdone;
 
-  reg zorro_read = 0;
-  reg zorro_write = 0;
+  reg zorro_read;
+  reg zorro_write;
   
-  reg zorro_interrupt = 0;
+  reg zorro_interrupt;
   assign ZORRO_INT6 = zorro_interrupt;
   
   reg [15:0] data_in;
@@ -649,8 +647,8 @@ module MNTZorro_v0_1_S00_AXI
   reg [15:0] regdata_in;
 
   // ram arbiter
-  (* mark_debug = "true" *) reg zorro_ram_read_request = 0;
-  (* mark_debug = "true" *) reg zorro_ram_write_request = 0;
+  (* mark_debug = "true" *) reg zorro_ram_read_request;
+  (* mark_debug = "true" *) reg zorro_ram_write_request;
   reg [31:0] zorro_ram_read_addr;
   reg [3:0] zorro_ram_read_bytes;
   reg [31:0] zorro_ram_write_addr;
@@ -658,14 +656,14 @@ module MNTZorro_v0_1_S00_AXI
   reg [3:0] zorro_ram_write_bytes;
 
   reg [15:0] default_data = 'hffff; // causes read/write glitches on A2000 (data bus interference) when 0
-  reg [1:0] zorro_write_capture_bytes = 0;
-  reg [15:0] zorro_write_capture_data = 0;
+  reg [1:0] zorro_write_capture_bytes;
+  reg [15:0] zorro_write_capture_data;
 
   // z3 strobes
-  reg z3_ds3=0;
-  reg z3_ds2=0;
-  reg z3_ds1=0;
-  reg z3_ds0=0;
+  reg z3_ds3;
+  reg z3_ds2;
+  reg z3_ds1;
+  reg z3_ds0;
   
   // level shifter direction pins
   assign ZORRO_DATADIR     = ZORRO_DOE & (dataout_enable | dataout_z3); // d2-d9  d10-15, d0-d1
@@ -733,7 +731,7 @@ module MNTZorro_v0_1_S00_AXI
     
     znDS1_sync  <= {znDS1_sync[1:0],ZORRO_NDS1};
     znDS0_sync  <= {znDS0_sync[1:0],ZORRO_NDS0};
-    znFCS_sync  <= {znFCS_sync[1:0],ZORRO_NFCS};
+    znFCS_sync  <= {znFCS_sync[3:0],ZORRO_NFCS};
     znCFGIN_sync<= {znCFGIN_sync[1:0],ZORRO_NCFGIN};
     zDOE_sync   <= {zDOE_sync[0],ZORRO_DOE};
     
@@ -768,41 +766,35 @@ module MNTZorro_v0_1_S00_AXI
 `endif
     
     // Z3 ------------------------------------------------
-`ifdef ZORRO3
-    z3addr2 <= {ZORRO_DATA_IN[15:8],ZORRO_ADDR_IN[22:1],2'b00};
-    
+`ifdef ZORRO3        
     // sample z3addr on falling edge of /FCS
-    // A4000 needs [0] here, [1] worked for A3000
-    case (znFCS_sync[2:1])
+    // according to Z3 spec, we have max 25ns to react to falling FCS.
+    case (znFCS_sync[1:0])
       2'b01: begin
         z3_fcs_state <= 1;
         z3addr <= 0;
       end
       2'b10: begin
-        // CHECK: if responding too quickly, this causes crashes
         z3_fcs_state <= 0;
-        z3addr <= z3addr2;
+        z3addr <= {ZORRO_DATA_IN[15:8],ZORRO_ADDR_IN[22:1],2'b00};
       end
     endcase
     
     z3addr_in_ram <= (z3addr >= z3_ram_low) && (z3addr < z3_ram_high);
     z3addr_in_reg <= (z3addr >= z3_reg_low) && (z3addr < z3_reg_high);
+    
+    z3_ds0 <= ~znDS0_sync[0];
+    z3_ds1 <= ~znDS1_sync[0];
+    z3_ds2 <= ~znLDS_sync[0];
+    z3_ds3 <= ~znUDS_sync[0];
 
     z3addr_autoconfig <= (z3addr[31:16]=='hff00);
     
     z3_mapped_addr <= (z3addr-z3_ram_low);
     data_in_z3_low16 <= ZORRO_ADDR_IN[22:7]; //zA[22:7]; // FIXME why sample this twice?
     
-    if (znUDS_sync[1]==0 || znLDS_sync[1]==0 || znDS1_sync[1]==0 || znDS0_sync[1]==0)
-      z3_din_latch <= 1;
-    else
-      z3_din_latch <= 0;
-    
-    // pipelined for better timing
-    if (z3_din_latch) begin
-      z3_din_high_s2 <= zdata_in_sync; //zD;
-      z3_din_low_s2  <= data_in_z3_low16; //zA[22:7];
-    end
+    z3_din_high_s2 <= zdata_in_sync; //zD;
+    z3_din_low_s2  <= data_in_z3_low16; //zA[22:7];
     
     // pipelined for better timing
     data_z3_hi16_latched <= data_z3_hi16;
@@ -813,12 +805,11 @@ module MNTZorro_v0_1_S00_AXI
     zdata_in_sync2 <= ZORRO_DATA_IN;
     zdata_in_sync <= zdata_in_sync2;
     
-    zorro_read  <= zREAD_sync[2]; // FIXME was 0
-    zorro_write <= ~zREAD_sync[2]; // FIXME was 0
+    zorro_read  <= zREAD_sync[0];
+    zorro_write <= ~zREAD_sync[0];
     
-    //dtack_latched <= dtack;
-    
-    z_reset <= (znRST_sync==2'b00);
+    z_reset_delayed <= (znRST_sync==2'b00);
+    z_reset <= z_reset_delayed;
     z_cfgin <= (znCFGIN_sync==3'b000);
     z_cfgin_lo <= (znCFGIN_sync==3'b111);
     
@@ -896,64 +887,66 @@ module MNTZorro_v0_1_S00_AXI
   localparam WAIT_READ_DMA_Z3C = 56;
   
   (* mark_debug = "true" *) reg [7:0] zorro_state = COLD;
-  reg zorro_idle = 0;
-  reg [7:0] read_counter = 0; // used by Z3
+  reg zorro_idle;
+  reg [7:0] read_counter; // used by Z3
+  reg [5:0] dtack_timeout = 3; // number of cycles before we turn of our dtack signal
   reg [7:0] dataout_time = 'h02;
   reg [7:0] datain_time = 'h10;
   reg [7:0] datain_counter = 0;
-  reg [23:0] last_addr = 0;
-  reg [23:0] last_read_addr = 0;
-  reg [15:0] last_data = 0;
-  reg [15:0] last_read_data = 0;
+  reg [23:0] last_addr;
+  reg [23:0] last_read_addr;
+  reg [15:0] last_data;
+  reg [15:0] last_read_data;
   
-  reg [15:0] zaddr_regpart = 0;
-  reg [15:0] z3addr_regpart = 0;
-  reg [15:0] regread_addr = 0;
-  reg [15:0] regwrite_addr = 0;
+  reg [15:0] zaddr_regpart;
+  reg [15:0] z3addr_regpart;
+  reg [15:0] regread_addr;
+  reg [15:0] regwrite_addr;
   
-  reg [31:0] axi_reg0 = 0;
-  reg [31:0] axi_reg1 = 0;
-  reg [31:0] axi_reg2 = 0;
-  reg [31:0] axi_reg3 = 0;
+  reg [31:0] axi_reg0;
+  reg [31:0] axi_reg1;
+  reg [31:0] axi_reg2;
+  reg [31:0] axi_reg3;
   
-  reg [31:0] video_control_data_zorro = 0;
-  reg [7:0] video_control_op_zorro = 0;
-  reg [31:0] video_control_data_axi = 0;
-  reg [7:0] video_control_op_axi = 0;
-  reg video_control_axi = 0;
+  reg [31:0] video_control_data_zorro;
+  reg [7:0] video_control_op_zorro;
+  reg [31:0] video_control_data_axi;
+  reg [7:0] video_control_op_axi;
+  reg video_control_axi;
   
-  reg zorro_ram_read_flag = 0;
-  reg zorro_ram_write_flag = 0;
+  reg [31:0] video_control_data; // to output
+  reg [7:0]  video_control_op;   // to output
+  reg        video_control_vblank; // from input
+  reg        video_control_interlace;
   
-  reg videocap_mode = 0;
-  reg videocap_mode_in = 0;
-  (* mark_debug = "true" *) reg [6:0] videocap_hs = 0;
-  (* mark_debug = "true" *) reg [6:0] videocap_vs = 0;
+  reg zorro_ram_read_flag;
+  reg zorro_ram_write_flag ;
+  
+  reg videocap_mode;
+  reg videocap_mode_in;
+  (* mark_debug = "true" *) reg [6:0] videocap_hs;
+  (* mark_debug = "true" *) reg [6:0] videocap_vs;
   reg [23:0] videocap_rgbin = 0;
   
-  (* mark_debug = "true" *) reg [9:0] videocap_x = 0;
-  (* mark_debug = "true" *) reg [9:0] videocap_y = 0;
-  (* mark_debug = "true" *) reg [9:0] videocap_x2 = 0;
-  (* mark_debug = "true" *) reg videocap_x_done = 0;
-  (* mark_debug = "true" *) reg [9:0] videocap_y2 = 0;
-  (* mark_debug = "true" *) reg [9:0] videocap_y_sync = 0;
-  (* mark_debug = "true" *) reg [9:0] videocap_ymax = 0;
-  (* mark_debug = "true" *) reg [9:0] videocap_ymax2 = 0;
-  (* mark_debug = "true" *) reg [9:0] videocap_ymax_sync = 0;
-  (* mark_debug = "true" *) reg [9:0] videocap_y3 = 0;
-  reg [9:0] videocap_voffset = 'h1a;
-  reg [9:0] videocap_prex = 'h5e; // 3f
-  reg [9:0] videocap_prex_sync = 'h5e;
+  (* mark_debug = "true" *) reg [9:0] videocap_x;
+  (* mark_debug = "true" *) reg [9:0] videocap_y;
+  (* mark_debug = "true" *) reg [9:0] videocap_x2;
+  (* mark_debug = "true" *) reg videocap_x_done;
+  (* mark_debug = "true" *) reg [9:0] videocap_y2;
+  (* mark_debug = "true" *) reg [9:0] videocap_y_sync;
+  (* mark_debug = "true" *) reg [9:0] videocap_ymax;
+  (* mark_debug = "true" *) reg [9:0] videocap_ymax2;
+  (* mark_debug = "true" *) reg [9:0] videocap_ymax_sync;
+  (* mark_debug = "true" *) reg [9:0] videocap_y3;
   reg vc_next_lace_field = 0;
   reg [3:0] vc_shortlines = 0;
   
   parameter VCAPW = 799;
   reg [31:0] videocap_buf  [0:VCAPW];
-  reg videocap_lace_field=0;
-  (* mark_debug = "true" *) reg videocap_interlace=0;
-  (* mark_debug = "true" *) reg videocap_ntsc=0;
-  reg [9:0] videocap_voffset2=0;
-  (* mark_debug = "true" *) reg [7:0] videocap_hs_pulse_width=0;
+  reg videocap_lace_field;
+  (* mark_debug = "true" *) reg videocap_interlace;
+  (* mark_debug = "true" *) reg videocap_ntsc;
+  (* mark_debug = "true" *) reg [7:0] videocap_hs_pulse_width;
   
   reg E7M_PSEN = 0;
   reg E7M_PSINCDEC = 0;
@@ -1040,8 +1033,6 @@ module MNTZorro_v0_1_S00_AXI
     videocap_vs <= {videocap_vs[5:0], VCAP_VSYNC};
     videocap_hs <= {videocap_hs[5:0], VCAP_HSYNC};
     
-    videocap_prex_sync <= videocap_prex;
-    
     `ifdef VARIANT_ZZ9500
     videocap_rgbin <=  {VCAP_R3,VCAP_R2,VCAP_R1,VCAP_R0,VCAP_R3,VCAP_R2,VCAP_R1,VCAP_R0,
                         VCAP_G3,VCAP_G2,VCAP_G1,VCAP_G0,VCAP_G3,VCAP_G2,VCAP_G1,VCAP_G0,
@@ -1114,8 +1105,12 @@ module MNTZorro_v0_1_S00_AXI
         videocap_ymax <= videocap_y2;
         videocap_ymax2 <= videocap_ymax;
       end
-    end else if (videocap_hs[6:1]=='b000111 /*&& videocap_hs_pulse_width>50 && videocap_hs_pulse_width<128*/) begin
-      videocap_x  <= 2; // skip 2px noise
+    end else if (videocap_hs[6:1]=='b000111) begin
+`ifdef VARIANT_ZZ9500
+      videocap_x  <= 4; // skip 4px noise
+`else
+      videocap_x  <= 4; // skip 2px noise
+`endif
       videocap_x2 <= 0;
       
 `ifdef VARIANT_ZZ9500
@@ -1156,17 +1151,20 @@ module MNTZorro_v0_1_S00_AXI
       
   end
   
-  reg [11:0] videocap_save_x=0;
-  reg [11:0] videocap_save_x2=0;
-  reg [11:0] videocap_save_x3=0;
-  reg [11:0] videocap_yoffset=0;
-  reg [11:0] videocap_xoffset=0;
-  reg [11:0] videocap_pitch=720;
-  reg [9:0]  videocap_save_line_done=1;
-  reg [11:0] videocap_save_y=0;
-  reg [31:0] videocap_save_y2=0;
-  reg [31:0] videocap_save_addr=0;
-  reg [3:0]  videocap_save_state=3; // FIXME
+  reg [11:0] videocap_save_x;
+  reg [11:0] videocap_save_x2;
+  reg [11:0] videocap_save_x3;
+  reg [11:0] videocap_yoffset;
+  reg [11:0] videocap_xoffset;
+  reg [11:0] videocap_pitch;
+  reg [11:0] videocap_pitch_sync;
+  reg [11:0] videocap_pitch_snoop;
+  reg        videocap_pitch_snooped;
+  reg [9:0]  videocap_save_line_done;
+  reg [11:0] videocap_save_y;
+  reg [31:0] videocap_save_y2;
+  reg [31:0] videocap_save_addr;
+  reg [3:0]  videocap_save_state;
   
   reg videocap_mode_sync;
   
@@ -1180,7 +1178,6 @@ module MNTZorro_v0_1_S00_AXI
   reg m00_axi_awvalid_z3 = 0;
   reg m00_axi_wvalid_z3 = 0;
   reg [3:0] m00_axi_wstrb_z3;
-  reg z3_axi_write = 0;
   
   assign m00_axi_awaddr  = m00_axi_awaddr_z3;
   assign m00_axi_awvalid = m00_axi_awvalid_z3;
@@ -1203,17 +1200,17 @@ module MNTZorro_v0_1_S00_AXI
     m00_axi_awcache <= 'h3;
     m00_axi_awlock <= 'h0;
     m00_axi_awprot <= 'h0;
-    m00_axi_awqos <= 'h0;
+    //m00_axi_awqos <= 'h0;
     m00_axi_wlast <= 'h1;
     m00_axi_bready <= 'h1;
     
     m00_axi_arlen <= 'h0;
     m00_axi_arsize <= 'h2;
     m00_axi_arburst <= 'h0;
-    m00_axi_arcache <= 'hF; //was 3
+    m00_axi_arcache <= 'hf; //was 3
     m00_axi_arlock <= 'h0;
     m00_axi_arprot <= 'h0;
-    m00_axi_arqos <= 'h0;
+    //m00_axi_arqos <= 'h0;
     m00_axi_rready <= 1;
     
     // FIXME this could use bursts
@@ -1241,6 +1238,8 @@ module MNTZorro_v0_1_S00_AXI
     
     // pass interlace mode to video control block
     video_control_interlace <= videocap_interlace;
+    
+    videocap_pitch_sync <= videocap_pitch;
        
     //videocap_x_sync <= videocap_x;
     videocap_y_sync2 <= videocap_y3;
@@ -1251,74 +1250,86 @@ module MNTZorro_v0_1_S00_AXI
       videocap_ymax_sync <= (videocap_ymax<<1)-(2*40);
     else
       videocap_ymax_sync <= videocap_ymax-36;
+      
+    // letterbox top and bottom to box out noisy lines
+    if (videocap_y_sync2<videocap_ymax_sync && videocap_x_done) begin
+      videocap_y_sync <= videocap_y_sync2;
+    end
 `else
     if (videocap_interlace)
       videocap_ymax_sync <= (videocap_ymax<<1);
     else
       videocap_ymax_sync <= videocap_ymax;
-`endif
     
-    // letterbox top and bottom to box out noisy lines
-    if (videocap_y_sync2<videocap_ymax_sync && videocap_x_done) begin
+    if (videocap_x_done) begin
       videocap_y_sync <= videocap_y_sync2;
     end
+`endif
     
     videocap_save_x2 <= videocap_save_x;
-    vc_saveaddr1 <= vc_saving_line*videocap_pitch;
+    vc_saveaddr1 <= vc_saving_line*videocap_pitch_sync;
     // we shift left by 2 bits to scale from 1 pixel to 4 bytes
     vc_saveaddr2 <= (vc_saveaddr1+videocap_save_x)<<2;
    
+    // FIXME
+    if (videocap_save_line_done!=videocap_y_sync) begin
+      vc_saving_line <= videocap_y_sync;
+    end
+    
     if (m01_axi_aresetn == 0) begin
-      videocap_save_state <= 3;
-      m01_axi_wvalid_out  <= 0;
-      m01_axi_awvalid_out <= 0;
+      videocap_save_state <= 4;
+      //m01_axi_wvalid_out  <= 0;
+      //m01_axi_awvalid_out <= 0;
     end else begin
       m01_axi_awaddr_out  <= `VIDEOCAP_ADDR+vc_saveaddr2;
       m01_axi_wdata_out   <= videocap_buf[videocap_save_x];
   
-      // FIXME
-      if (videocap_save_line_done!=videocap_y_sync) begin
-        vc_saving_line <= videocap_y_sync;
-      end
-      
-      if (videocap_save_state == 0) begin
-        // initial state
-        if (m01_axi_awready) begin
-          videocap_save_state <= 2;
+      // one-hot encoded
+      case (videocap_save_state)
+        4'h0: begin
+          // initial state
+          if (m01_axi_awready) begin
+            videocap_save_state <= 2;
+          end
         end
-      end else if (videocap_save_state == 1) begin
-        m01_axi_awvalid_out <= 0;
-        m01_axi_wvalid_out  <= 1;
-        if (m01_axi_wready) begin
-`ifdef VARIANT_ZZ9500
-          if (videocap_save_x >= videocap_pitch-2) begin
-`else
-          if (videocap_save_x >= videocap_pitch) begin // 728 FIXME
-`endif
-
+        4'h1: begin
+          m01_axi_awvalid_out <= 0;
+          m01_axi_wvalid_out  <= 1;
+          if (m01_axi_wready) begin
+            videocap_save_state <= 2;
+          end
+        end
+        4'h2: begin
+      
+          // FIXME this was moved from state 1 wready clause
+  `ifdef VARIANT_ZZ9500
+          if (videocap_save_x >= videocap_pitch_sync-2) begin
+  `else
+          if (videocap_save_x >= videocap_pitch_sync) begin // 728 FIXME
+  `endif
             videocap_save_line_done <= vc_saving_line;
             videocap_save_x <= 0;
           end else if (videocap_save_line_done != vc_saving_line)
             videocap_save_x <= videocap_save_x + 1'b1;
-          videocap_save_state <= 2;
-        end
-      end else if (videocap_save_state == 2) begin
-        m01_axi_awvalid_out <= 1;
-        m01_axi_wvalid_out  <= 0;
-        if (m01_axi_awready) begin
+          
+          m01_axi_awvalid_out <= 1;
+          m01_axi_wvalid_out  <= 0;
+          if (m01_axi_awready) begin
+            if (videocap_mode_sync)
+              videocap_save_state <= 1;
+            else
+              videocap_save_state <= 4;
+          end
+        end 
+        4'h4: begin
+          // videocap is disabled, lets wait here
           if (videocap_mode_sync)
-            videocap_save_state <= 1;
-          else
-            videocap_save_state <= 3;
+            videocap_save_state <= 0;
+          
+          m01_axi_wvalid_out  <= 0;
+          m01_axi_awvalid_out <= 0;
         end
-      end else if (videocap_save_state == 3) begin
-        // videocap is disabled, lets wait here
-        if (videocap_mode_sync)
-          videocap_save_state <= 0;
-        
-        m01_axi_wvalid_out  <= 0;
-        m01_axi_awvalid_out <= 0;
-      end
+      endcase
     end
   end
   
@@ -1333,7 +1344,7 @@ module MNTZorro_v0_1_S00_AXI
     
     if (/*z_cfgin_lo ||*/ z_reset) begin
       zorro_state <= RESET;
-    end else 
+    end //else 
       case (zorro_state)
         
         COLD: begin
@@ -1345,16 +1356,17 @@ module MNTZorro_v0_1_S00_AXI
           dataout <= 0;
           dataout_z3 <= 0;
           slaven <= 0;
+          dtack <= 0;
           z_ovr <= 0;
           z_confout <= 0;
           z3_confdone <= 0;
           zorro_ram_read_request <= 0;
           zorro_ram_write_request <= 0;
-          zorro_interrupt <= 0;
-          video_control_data_zorro <= 0;
-          video_control_op_zorro <= 0;
-          video_control_data_axi <= 0;
-          video_control_op_axi <= 0;
+          zorro_ram_read_flag <= 0;
+          zorro_ram_write_flag <= 0;
+          
+          videocap_mode_in <= 0;
+          videocap_pitch <= 720; // FIXME?
           
           if (!z_reset)
             zorro_state <= DECIDE_Z2_Z3;
@@ -1438,8 +1450,7 @@ module MNTZorro_v0_1_S00_AXI
         
         Z3_AUTOCONF_WRITE: begin
           slaven <= 1;
-          // was [2] for A3000
-          if (z3_din_latch) begin
+          if (z3_ds0||z3_ds1||z3_ds2||z3_ds3) begin
             zorro_state <= Z3_DTACK;
             casex (z3addr[15:0])
               'hXX44: begin
@@ -1462,7 +1473,6 @@ module MNTZorro_v0_1_S00_AXI
           // FIXME why?
           //data_z3_low16 <= 'hffff;
           
-          // was [2] for A3000
           if (z_cfgin && z3addr_autoconfig) begin
             if (zorro_read) begin
               // autoconfig ROM
@@ -1700,7 +1710,7 @@ module MNTZorro_v0_1_S00_AXI
             zorro_write_capture_bytes <= {~znUDS_sync[2],~znLDS_sync[2]}; // FIXME was 1
             zorro_write_capture_data <= zdata_in_sync;
             
-            if (last_addr<'h10000 || videocap_mode)
+            if (last_addr<'h10000)
               zorro_state <= WAIT_WRITE2;
             else
               zorro_state <= WAIT_WRITE_DMA_Z2;
@@ -1745,6 +1755,7 @@ module MNTZorro_v0_1_S00_AXI
           m00_axi_wvalid_z3 <= 0;
           z_ovr <= 0;
           
+          // FIXME
           read_counter <= read_counter + 1'b1;
           if (read_counter >= 10) begin
             dtack <= 0;
@@ -1782,11 +1793,11 @@ module MNTZorro_v0_1_S00_AXI
         
         // questionable direct access
         Z3_REGWRITE_PRE: begin
-          if (znDS1_sync[2]==0) begin
+          if (z3_ds1) begin
             regdata_in <= data_in_z3_low16;
             z3addr_regpart <= (z3addr[15:0])|16'h2;
             zorro_state <= Z3_REGWRITE;
-          end else if (znUDS_sync[2]==0) begin
+          end else if (z3_ds3) begin
             regdata_in <= zdata_in_sync;
             z3addr_regpart <= z3addr[15:0];
             zorro_state <= Z3_REGWRITE;
@@ -1795,9 +1806,7 @@ module MNTZorro_v0_1_S00_AXI
         
         Z3_REGREAD_PRE: begin
           z3addr_regpart <= z3addr[15:0]; //|16'h2;
-          //if (z3_din_latch) begin
           zorro_state <= Z3_REGREAD;
-          //end
           dataout_z3 <= 1;
         end
         
@@ -1820,7 +1829,6 @@ module MNTZorro_v0_1_S00_AXI
               slaven <= 1;
             end else if (z3addr_in_ram && zorro_write) begin
               // write to memory
-              //read_counter <= 0;
               slaven <= 1;
               
               zorro_state <= Z3_WRITE_PRE;
@@ -1830,7 +1838,7 @@ module MNTZorro_v0_1_S00_AXI
               data_z3_low16 <= default_data;
               slaven <= 1;
               
-              if (z3_mapped_addr<'h10000 || videocap_mode)
+              if (z3_mapped_addr<'h10000)
                 zorro_state <= Z3_READ_UPPER;
               else
                 zorro_state <= WAIT_READ_DMA_Z3;
@@ -1873,19 +1881,16 @@ module MNTZorro_v0_1_S00_AXI
           zorro_ram_read_request <= 1;
           dataout_z3 <= 1; // enable data output
           
-          
-          // dummy read
+          // dummy read for debug
           /*dtack <= 1;
            data_z3_hi16 <= 'hffff;
            data_z3_low16 <= 'hffff;
            zorro_state <= Z3_ENDCYCLE;*/
-          
         end
         
         Z3_READ_DELAY1: begin
           data_z3_hi16 <= axi_reg1[31:16];
           data_z3_low16 <= axi_reg1[15:0];
-          //read_counter <= 0;
           
           if (zorro_ram_read_flag) begin
             zorro_ram_read_request <= 0; // acknowledge read request done
@@ -1902,29 +1907,17 @@ module MNTZorro_v0_1_S00_AXI
         end
         
         Z3_WRITE_PRE: begin
-          // FIXME was [2] for A3000
-          z3_ds0 <= ~znDS0_sync[1];
-          z3_ds1 <= ~znDS1_sync[1];
-          z3_ds2 <= ~znLDS_sync[1];
-          z3_ds3 <= ~znUDS_sync[1];
-          
-          if (~znDS0_sync[1]||~znDS1_sync[1]||~znLDS_sync[1]||~znUDS_sync[1]) begin
+          if (z3_ds0||z3_ds1||z3_ds2||z3_ds3) begin
             zorro_state <= Z3_WRITE_PRE2;
           end
         end
         
         Z3_WRITE_PRE2: begin
-          // 1 more time for good measure
-          z3_ds0 <= ~znDS0_sync[1];
-          z3_ds1 <= ~znDS1_sync[1];
-          z3_ds2 <= ~znLDS_sync[1];
-          z3_ds3 <= ~znUDS_sync[1];
-        
           // FIXME DMA temporarily disabled for FW2.0
 `ifdef VARIANT_FW20
           zorro_state <= Z3_WRITE_UPPER;
 `else
-          if (z3_mapped_addr<'h10000 || videocap_mode)
+          if (z3_mapped_addr<'h10000)
             zorro_state <= Z3_WRITE_UPPER;
           else
             zorro_state <= WAIT_WRITE_DMA_Z3;
@@ -1972,8 +1965,6 @@ module MNTZorro_v0_1_S00_AXI
         end
 
         WAIT_WRITE_DMA_Z3: begin
-          //z3_axi_write <= 1;
-          
           m00_axi_wstrb_z3   <= {z3_ds0, z3_ds1, z3_ds2, z3_ds3};
           m00_axi_awaddr_z3  <= `ARM_MEMORY_START + (z3_mapped_addr/*&32'hfffffffc*/); // max 256MB
           m00_axi_wdata_z3   <= {z3_din_low_s2[7:0], z3_din_low_s2[15:8], z3_din_high_s2[7:0], z3_din_high_s2[15:8]};
@@ -2000,16 +1991,15 @@ module MNTZorro_v0_1_S00_AXI
         end
         
         Z3_ENDCYCLE: begin
-          //z3_axi_write <= 0;
           dtack <= 1;
-//          slaven <= 0;
 
           // we're timing out or own dtack here. because of a zorro
           // bug / subtlety, dtack can be sampled incorrectly to "hang over"
           // into the next amiga zorro cycle.
-          // TODO: find the optimal value or make it user adjustable (the 10)
+          // this is because we have a long rise time on our DTACK
+          // output/1k pullup.
           read_counter <= read_counter + 1'b1;
-          if (read_counter >= 10) begin
+          if (read_counter >= dtack_timeout) begin
             dtack <= 0;
           end
           
@@ -2063,9 +2053,8 @@ module MNTZorro_v0_1_S00_AXI
             'h02: video_control_data_zorro[15:0]  <= regdata_in[15:0];
             'h04: video_control_op_zorro[7:0]     <= regdata_in[7:0]; // FIXME
             'h06: videocap_mode_in <= regdata_in[0];
+            'h20: if (regdata_in[5:0]>0) dtack_timeout <= regdata_in[5:0];
             //'h14: zorro_interrupt <= regdata_in[0];
-            //'h08: videocap_prex <= regdata_in;
-            //'h0a: videocap_voffset <= regdata_in;
             //'h10: E7M_PSINCDEC <= regdata_in[0];
             //'h12: E7M_PSEN     <= regdata_in[0];
           endcase
@@ -2073,7 +2062,7 @@ module MNTZorro_v0_1_S00_AXI
       endcase
     
     // PSEN reset
-    if (E7M_PSEN==1'b1) E7M_PSEN <= 1'b0;
+    //if (E7M_PSEN==1'b1) E7M_PSEN <= 1'b0;
     
     // ARM video control
     if (axi_reg2[31]==1'b1) begin
@@ -2104,11 +2093,18 @@ module MNTZorro_v0_1_S00_AXI
       video_control_op   <= video_control_op_zorro;
     end
     
+    video_control_data_out <= video_control_data;
+    video_control_op_out   <= video_control_op;
+    video_control_vblank   <= video_control_vblank_in;
+    video_control_interlace_out <= video_control_interlace;
+    
     // snoop the screen width for correct capture pitch
-    if (video_control_op_axi == 2) begin
+    if (video_control_op == 2) begin
       // OP_DIMENSIONS = 2
-      videocap_pitch <= video_control_data_axi[11:0];
+      videocap_pitch_snoop <= video_control_data[11:0];
     end
+    
+    videocap_pitch <= videocap_pitch_snoop;
     
     out_reg0 <= ZORRO3 ? last_z3addr : last_addr;
     out_reg1 <= zorro_ram_write_data;
