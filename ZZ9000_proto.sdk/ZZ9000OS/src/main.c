@@ -551,7 +551,7 @@ void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
 #define MNT_FB_BASE     			0x010000
 
 #define REVISION_MAJOR 1
-#define REVISION_MINOR 5
+#define REVISION_MINOR 6
 
 void video_mode_init(int mode, int scalemode, int colormode) {
 	int hdiv = 1, vdiv = 1;
