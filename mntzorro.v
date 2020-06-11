@@ -781,10 +781,10 @@ module MNTZorro_v0_1_S00_AXI
     z3addr_in_ram <= (z3addr >= z3_ram_low) && (z3addr < z3_ram_high);
     z3addr_in_reg <= (z3addr >= z3_reg_low) && (z3addr < z3_reg_high);
     
-    z3_ds0 <= ~znDS0_sync[0];
-    z3_ds1 <= ~znDS1_sync[0];
-    z3_ds2 <= ~znLDS_sync[0];
-    z3_ds3 <= ~znUDS_sync[0];
+    z3_ds0 <= ~znDS0_sync[1];
+    z3_ds1 <= ~znDS1_sync[1];
+    z3_ds2 <= ~znLDS_sync[1];
+    z3_ds3 <= ~znUDS_sync[1];
 
     z3addr_autoconfig <= (z3addr[31:16]=='hff00);
     
@@ -885,7 +885,7 @@ module MNTZorro_v0_1_S00_AXI
   (* mark_debug = "true" *) reg [7:0] zorro_state = COLD;
   reg zorro_idle;
   reg [7:0] read_counter; // used by Z3
-  reg [5:0] dtack_timeout = 10; // number of cycles before we turn of our dtack signal
+  reg [5:0] dtack_timeout = 6; // number of cycles before we turn of our dtack signal
   reg [7:0] dataout_time = 'h02;
   reg [7:0] datain_time = 'h10;
   reg [7:0] datain_counter = 0;
@@ -2049,7 +2049,7 @@ module MNTZorro_v0_1_S00_AXI
             'h02: video_control_data_zorro[15:0]  <= regdata_in[15:0];
             'h04: video_control_op_zorro[7:0]     <= regdata_in[7:0]; // FIXME
             'h06: videocap_mode_in <= regdata_in[0];
-            'h20: if (regdata_in[5:0]>0) dtack_timeout <= regdata_in[5:0];
+            //'h20: if (regdata_in[5:0]>0) dtack_timeout <= regdata_in[5:0];
             //'h14: zorro_interrupt <= regdata_in[0];
             //'h10: E7M_PSINCDEC <= regdata_in[0];
             //'h12: E7M_PSEN     <= regdata_in[0];
