@@ -604,8 +604,6 @@ module MNTZorro_v0_1_S00_AXI
   (* mark_debug = "true" *) reg [31:0] z3addr;
   (* mark_debug = "true" *) reg [31:0] last_z3addr;
   (* mark_debug = "true" *) reg [31:0] z3addr2;
-  (* mark_debug = "true" *) reg [31:0] z3addr3;
-  reg [31:0] z3addr3;
   (* mark_debug = "true" *) reg [31:0] z3_mapped_addr;
   (* mark_debug = "true" *) reg [31:0] z3_read_addr;
   (* mark_debug = "true" *) reg [15:0] z3_read_data;
@@ -775,10 +773,11 @@ module MNTZorro_v0_1_S00_AXI
       end
       2'b10: begin
         z3_fcs_state <= 0;
-        z3addr <= {ZORRO_DATA_IN[15:8],ZORRO_ADDR_IN[22:1],2'b00};
+        z3addr <= z3addr2;
       end
     endcase
     
+    z3addr2 <= {ZORRO_DATA_IN[15:8],ZORRO_ADDR_IN[22:1],2'b00};
     z3addr_in_ram <= (z3addr >= z3_ram_low) && (z3addr < z3_ram_high);
     z3addr_in_reg <= (z3addr >= z3_reg_low) && (z3addr < z3_reg_high);
     
@@ -793,14 +792,12 @@ module MNTZorro_v0_1_S00_AXI
     
     z3_din_high_s2 <= ZORRO_DATA_IN;       //zD[15:0];
     z3_din_low_s2  <= ZORRO_ADDR_IN[22:7]; //zA[22:7];
-    //z3_din_low_s2  <= z3_din_low;
     
     // pipelined for better timing
     data_z3_hi16_latched  <= data_z3_hi16;
     data_z3_low16_latched <= data_z3_low16;
 `endif
     
-    // FIXME shared by z2/z3 with high load, split up?
     zdata_in_sync2 <= ZORRO_DATA_IN;
     zdata_in_sync <= zdata_in_sync2;
     
@@ -888,7 +885,7 @@ module MNTZorro_v0_1_S00_AXI
   (* mark_debug = "true" *) reg [7:0] zorro_state = COLD;
   reg zorro_idle;
   reg [7:0] read_counter; // used by Z3
-  reg [5:0] dtack_timeout = 3; // number of cycles before we turn of our dtack signal
+  reg [5:0] dtack_timeout = 10; // number of cycles before we turn of our dtack signal
   reg [7:0] dataout_time = 'h02;
   reg [7:0] datain_time = 'h10;
   reg [7:0] datain_counter = 0;
@@ -1454,7 +1451,7 @@ module MNTZorro_v0_1_S00_AXI
             zorro_state <= Z3_DTACK;
             casex (z3addr[15:0])
               'hXX44: begin
-                z3_ram_low[31:16] <= zdata_in_sync;
+                z3_ram_low[31:16] <= z3_din_high_s2;
                 z_confout <= 1;
                 z3_confdone <= 1;
               end
@@ -1581,13 +1578,13 @@ module MNTZorro_v0_1_S00_AXI
                 case (z2_mapped_addr[7:0])
                   8'h48: begin
                     ram_low[31:24] <= 8'h0;
-                    ram_low[23:20] <= zdata_in_sync[15:12];
+                    ram_low[23:20] <= z3_din_high_s2[15:12];
                     ram_low[15:0] <= 16'h0;
                     zorro_state <= Z2_PRE_CONFIGURED; // configured
                   end
                   8'h4a: begin
                     ram_low[31:24] <= 8'h0;
-                    ram_low[19:16] <= zdata_in_sync[15:12];
+                    ram_low[19:16] <= z3_din_high_s2[15:12];
                     ram_low[15:0] <= 16'h0;
                   end
                   
@@ -1797,7 +1794,7 @@ module MNTZorro_v0_1_S00_AXI
             z3addr_regpart <= (z3addr[15:0])|16'h2;
             zorro_state <= Z3_REGWRITE;
           end else if (z3_ds3) begin
-            regdata_in <= zdata_in_sync;
+            regdata_in <= z3_din_high_s2;
             z3addr_regpart <= z3addr[15:0];
             zorro_state <= Z3_REGWRITE;
           end
