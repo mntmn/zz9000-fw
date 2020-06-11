@@ -1106,11 +1106,7 @@ module MNTZorro_v0_1_S00_AXI
         videocap_ymax2 <= videocap_ymax;
       end
     end else if (videocap_hs[6:1]=='b000111) begin
-`ifdef VARIANT_ZZ9500
-      videocap_x  <= 4; // skip 4px noise
-`else
-      videocap_x  <= 4; // skip 2px noise
-`endif
+      videocap_x  <= 0;
       videocap_x2 <= 0;
       
 `ifdef VARIANT_ZZ9500
@@ -1138,11 +1134,16 @@ module MNTZorro_v0_1_S00_AXI
       
       videocap_y2 <= videocap_y2 + 1'b1;
     end else if (videocap_x2<'h5e) begin  // 5a worked
+      // left crop
       videocap_x2 <= videocap_x2 + 1'b1;
     end else begin
       videocap_x <= videocap_x + 1'b1;
-      videocap_buf[videocap_x] <= videocap_rgbin;
     end
+    
+    if (videocap_x>2)
+      videocap_buf[videocap_x] <= videocap_rgbin;
+    else
+      videocap_buf[videocap_x] <= 0;
     
     if (videocap_x>'h200)
       videocap_x_done <= 1;
