@@ -885,7 +885,7 @@ module MNTZorro_v0_1_S00_AXI
   (* mark_debug = "true" *) reg [7:0] zorro_state = COLD;
   reg zorro_idle;
   reg [7:0] read_counter; // used by Z3
-  reg [5:0] dtack_timeout = 6; // number of cycles before we turn of our dtack signal
+  reg [5:0] dtack_timeout = 6; // number of cycles before we turn off our dtack signal
   reg [7:0] dataout_time = 'h02;
   reg [7:0] datain_time = 'h10;
   reg [7:0] datain_counter = 0;
