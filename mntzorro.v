@@ -599,7 +599,6 @@ module MNTZorro_v0_1_S00_AXI
   (* mark_debug = "true" *) reg [15:0] data_z3_hi16_latched;
   (* mark_debug = "true" *) reg [15:0] data_z3_low16_latched;
   
-  reg [15:0] data_in_z3_low16;
   (* mark_debug = "true" *) reg [15:0] z3_din_high_s2;
   (* mark_debug = "true" *) reg [15:0] z3_din_low_s2;
   (* mark_debug = "true" *) reg [31:0] z3addr;
@@ -791,13 +790,13 @@ module MNTZorro_v0_1_S00_AXI
     z3addr_autoconfig <= (z3addr[31:16]=='hff00);
     
     z3_mapped_addr <= (z3addr-z3_ram_low);
-    data_in_z3_low16 <= ZORRO_ADDR_IN[22:7]; //zA[22:7]; // FIXME why sample this twice?
     
-    z3_din_high_s2 <= zdata_in_sync; //zD;
-    z3_din_low_s2  <= data_in_z3_low16; //zA[22:7];
+    z3_din_high_s2 <= ZORRO_DATA_IN;       //zD[15:0];
+    z3_din_low_s2  <= ZORRO_ADDR_IN[22:7]; //zA[22:7];
+    //z3_din_low_s2  <= z3_din_low;
     
     // pipelined for better timing
-    data_z3_hi16_latched <= data_z3_hi16;
+    data_z3_hi16_latched  <= data_z3_hi16;
     data_z3_low16_latched <= data_z3_low16;
 `endif
     
@@ -1792,10 +1791,9 @@ module MNTZorro_v0_1_S00_AXI
         // ZORRO 3
         // =========================================================================
         
-        // questionable direct access
         Z3_REGWRITE_PRE: begin
           if (z3_ds1) begin
-            regdata_in <= data_in_z3_low16;
+            regdata_in <= z3_din_low_s2;
             z3addr_regpart <= (z3addr[15:0])|16'h2;
             zorro_state <= Z3_REGWRITE;
           end else if (z3_ds3) begin
