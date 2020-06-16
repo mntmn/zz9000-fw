@@ -19,8 +19,8 @@
  */
 
 // ZORRO2/3 switch
-//`define ZORRO2
-`define ZORRO3
+`define ZORRO2
+//`define ZORRO3
 
 // use together with ZORRO2:
 //`define VARIANT_ZZ9500
@@ -1188,8 +1188,7 @@ module MNTZorro_v0_1_S00_AXI
   assign m01_axi_wstrb   = 4'b1111;
   assign m01_axi_wvalid  = m01_axi_wvalid_out;
   
-  // FIXME i think this process can be dissolved
-  // AXI DMA arbiter
+  // AXI DMA defaults
   always @(posedge S_AXI_ACLK) begin
     m00_axi_awlen <= 'h0; // 1 burst (1 write)
     m00_axi_awsize <= 'h2; // 2^2 == 4 bytes
@@ -1220,6 +1219,13 @@ module MNTZorro_v0_1_S00_AXI
     m01_axi_awqos <= 'h0;
     m01_axi_wlast <= 'h1;
     m01_axi_bready <= 'h1;
+
+`ifdef ZORRO2
+    // ZORRO2 doesn't implement AXI DMA read yet
+    m00_axi_araddr  <= 0;
+    m00_axi_arvalid <= 0;
+    m00_axi_rready <= 0;
+`endif
   end
   
   reg [9:0] videocap_x_sync;
