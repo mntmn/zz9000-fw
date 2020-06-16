@@ -735,22 +735,25 @@ module MNTZorro_v0_1_S00_AXI
     znRST_sync  <= {znRST_sync[0],ZORRO_NIORST};
     
     // Z2 ------------------------------------------------
-`ifndef ZORRO3
+`ifdef ZORRO2
     // READ and nAS can happen dangerously close to each other. so we delay
     // the recognition of a valid Z2 cycle 2 clocks more than the other signals.
     z2_addr_valid <= (znAS_sync[4]==0 && znAS_sync[3]==0);
+    z2_read  <= (zREAD_sync[2] == 1'b1);
+    z2_write <= (zREAD_sync[2] == 1'b0);
     
     zaddr <= ZORRO_ADDR_IN[22:0];
     zaddr_sync  <= zaddr;
     zaddr_sync2 <= zaddr_sync;
     
     z2_mapped_addr <= {zaddr_sync2[22:0],1'b0};
-    z2_read  <= (zREAD_sync[2] == 1'b1); // FIXME was 0
-    z2_write <= (zREAD_sync[2] == 1'b0); // FIXME was 0
     
     z2_datastrobe_synced <= ((znUDS_sync[2]==0 && znUDS_sync[1]==0) || (znLDS_sync[2]==0 && znLDS_sync[1]==0));
     z2_uds <= (znUDS_sync[2]==0 && znUDS_sync[1]==0);
     z2_lds <= (znLDS_sync[2]==0 && znLDS_sync[1]==0);
+    
+    zdata_in_sync2 <= ZORRO_DATA_IN;
+    zdata_in_sync <= zdata_in_sync2;
     
     z2addr_in_ram <= (z2_mapped_addr>=ram_low && z2_mapped_addr<ram_high);
     z2addr_in_reg <= (z2_mapped_addr>=reg_low && z2_mapped_addr<reg_high);
@@ -796,14 +799,11 @@ module MNTZorro_v0_1_S00_AXI
     // pipelined for better timing
     data_z3_hi16_latched  <= data_z3_hi16;
     data_z3_low16_latched <= data_z3_low16;
-`endif
-    
-    zdata_in_sync2 <= ZORRO_DATA_IN;
-    zdata_in_sync <= zdata_in_sync2;
     
     zorro_read  <= zREAD_sync[0];
     zorro_write <= ~zREAD_sync[0];
-    
+`endif
+
     z_reset_delayed <= (znRST_sync==2'b00);
     z_reset <= z_reset_delayed;
     z_cfgin <= (znCFGIN_sync==3'b000);
@@ -1378,7 +1378,7 @@ module MNTZorro_v0_1_S00_AXI
           // directly on startup, before/without autoconfig.
           // we don't do this by default because it messes
           // up the timing sometimes.
-          //videocap_mode_in <= 1;          
+          //videocap_mode_in <= 1;
         end
         
         DECIDE_Z2_Z3: begin
@@ -1584,13 +1584,13 @@ module MNTZorro_v0_1_S00_AXI
                 case (z2_mapped_addr[7:0])
                   8'h48: begin
                     ram_low[31:24] <= 8'h0;
-                    ram_low[23:20] <= z3_din_high_s2[15:12];
+                    ram_low[23:20] <= zdata_in_sync[15:12];
                     ram_low[15:0] <= 16'h0;
                     zorro_state <= Z2_PRE_CONFIGURED; // configured
                   end
                   8'h4a: begin
                     ram_low[31:24] <= 8'h0;
-                    ram_low[19:16] <= z3_din_high_s2[15:12];
+                    ram_low[19:16] <= zdata_in_sync[15:12];
                     ram_low[15:0] <= 16'h0;
                   end
                   
