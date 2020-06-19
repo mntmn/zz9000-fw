@@ -53,6 +53,7 @@ localparam OP_UNUSED1=12;
 localparam OP_SPRITEXY=13;
 localparam OP_SPRITE_ADDR=14;
 localparam OP_SPRITE_DATA=15;
+localparam OP_VIDEOCAP=16; // we ignore this here, it's snooped by MNTZorro
 
 localparam CMODE_8BIT=0;
 localparam CMODE_16BIT=1;

@@ -23,7 +23,7 @@
 //`define ZORRO3
 
 // use together with ZORRO2:
-//`define VARIANT_ZZ9500
+`define VARIANT_ZZ9500
 
 //`define VARIANT_FW20
 
@@ -1368,8 +1368,8 @@ module MNTZorro_v0_1_S00_AXI
           zorro_ram_read_flag <= 0;
           zorro_ram_write_flag <= 0;
           
-          videocap_mode_in <= 0;
-          videocap_pitch <= 720; // FIXME?
+          //videocap_mode_in <= 0;
+          //videocap_pitch <= 720; // FIXME?
           
           if (!z_reset)
             zorro_state <= DECIDE_Z2_Z3;
@@ -1523,7 +1523,7 @@ module MNTZorro_v0_1_S00_AXI
           // this is a fix for the "pixel swap" bug: if AXI HP is getting writes too early,
           // it would sometimes (~10% of cold starts) get confused and swap pairs of writes.
 `ifndef VARIANT_FW20
-          videocap_mode_in <= 1;
+          //videocap_mode_in <= 1;
 `endif
 
 `ifdef ZORRO3
@@ -2104,6 +2104,12 @@ module MNTZorro_v0_1_S00_AXI
     if (video_control_op == 2) begin
       // OP_DIMENSIONS = 2
       videocap_pitch_snoop <= video_control_data[11:0];
+    end else if (video_control_op == 16) begin
+      // OP_VIDEOCAP
+      // this is ignored by video_formatter, we just use
+      // this channel to be able to toggle videocap from the
+      // ARM side
+      videocap_mode_in <= video_control_data[0];
     end
     
     videocap_pitch <= videocap_pitch_snoop;

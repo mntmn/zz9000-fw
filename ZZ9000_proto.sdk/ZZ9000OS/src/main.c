@@ -483,6 +483,7 @@ void video_formatter_valign() {
 }
 
 #define VF_DLY ;
+#define MNTVF_OP_VIDEOCAP 16
 #define MNTVF_OP_UNUSED 12
 #define MNTVF_OP_SPRITE_XY 13
 #define MNTVF_OP_SPRITE_ADDR 14
@@ -520,6 +521,14 @@ void video_formatter_init(int scalemode, int colormode, int width, int height,
 	video_formatter_write(colormode, MNTVF_OP_COLORMODE);
 
 	video_formatter_valign();
+}
+
+void videocap_enable() {
+	// this is a NOP in video formatter.
+	// this message is snooped by MNTZorro.
+	video_formatter_write(1, MNTVF_OP_VIDEOCAP);
+	video_formatter_write(1, 0);
+	video_formatter_write(0, 0);
 }
 
 void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
@@ -713,6 +722,8 @@ void handle_amiga_reset() {
 	ethernet_send_result = 0;
 
 	// FIXME there should be more state to be reset
+
+	videocap_enable();
 }
 
 uint16_t arm_app_output_event_serial = 0;
