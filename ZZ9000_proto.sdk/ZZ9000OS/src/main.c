@@ -1018,6 +1018,9 @@ int main() {
 	int request_video_align=0;
 	int vblank=0;
 
+	int custom_video_mode = ZZVMODE_CUSTOM;
+	int custom_vmode_param = VMODE_PARAM_HRES;
+
 	while (1) {
 		u32 zstate = mntzorro_read(MNTZ_BASE_ADDR, MNTZORRO_REG3);
 		zstate_raw = zstate;
@@ -1349,12 +1352,50 @@ int main() {
 				case 0x50: { // Copy crap from scratch area
 					for (int i = 0; i < rect_y1; i++) {
 						memcpy	((uint32_t*) ((u32) framebuffer + framebuffer_pan_offset + (i * rect_x1)),
-								 (uint32_t*) ((u32)0x33F0000 + (i * rect_x1)),
+								 (uint32_t*) ((u32)Z3_SCRATCH_ADDR + (i * rect_x1)),
 								 rect_x1);
 					}
 					Xil_DCacheFlush();
 					break;
 				}
+
+				case 0x52: // Custom video mode param
+					custom_vmode_param = zdata;
+					break;
+
+				case 0x54: { // Custom video mode data
+					int *target = &preset_video_modes[custom_video_mode].hres;
+					switch(custom_vmode_param) {
+						case VMODE_PARAM_VRES: target = &preset_video_modes[custom_video_mode].vres; break;
+						case VMODE_PARAM_HSTART: target = &preset_video_modes[custom_video_mode].hstart; break;
+						case VMODE_PARAM_HEND: target = &preset_video_modes[custom_video_mode].hend; break;
+						case VMODE_PARAM_HMAX: target = &preset_video_modes[custom_video_mode].hmax; break;
+						case VMODE_PARAM_VSTART: target = &preset_video_modes[custom_video_mode].vstart; break;
+						case VMODE_PARAM_VEND: target = &preset_video_modes[custom_video_mode].vend; break;
+						case VMODE_PARAM_VMAX: target = &preset_video_modes[custom_video_mode].vmax; break;
+						case VMODE_PARAM_POLARITY: target = &preset_video_modes[custom_video_mode].polarity; break;
+						case VMODE_PARAM_MHZ: target = &preset_video_modes[custom_video_mode].mhz; break;
+						case VMODE_PARAM_PHZ: target = &preset_video_modes[custom_video_mode].phz; break;
+						case VMODE_PARAM_VHZ: target = &preset_video_modes[custom_video_mode].vhz; break;
+						case VMODE_PARAM_HDMI: target = &preset_video_modes[custom_video_mode].hdmi; break;
+						case VMODE_PARAM_MUL: target = &preset_video_modes[custom_video_mode].mul; break;
+						case VMODE_PARAM_DIV: target = &preset_video_modes[custom_video_mode].div; break;
+						case VMODE_PARAM_DIV2: target = &preset_video_modes[custom_video_mode].div2; break;
+						default: break;
+					}
+
+					*target = zdata;
+					break;
+				}
+
+				case 0x56: // Set custom video mode index
+					custom_video_mode = zdata;
+					break;
+
+				case 0x58: // Set custom video mode without any questions asked.
+					// This assumes that the custom video mode is 640x480 or higher resolution.
+					video_mode_init(custom_video_mode, scalemode, colormode);
+					break;
 
 				case REG_ZZ_P2C: {
 					uint8_t draw_mode = blitter_colormode >> 8;
