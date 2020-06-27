@@ -57,6 +57,8 @@ typedef u8 uint8_t;
 
 #define I2C_PAUSE 10
 
+#define Z3_SCRATCH_ADDR 0x33F0000
+
 // I2C controller instance
 XIicPs Iic;
 
@@ -454,6 +456,36 @@ void pixelclock_init(int mhz) {
 	printf("CLK muldiv: %lu\n", muldiv);
 }
 
+void pixelclock_init_2(struct zz_video_mode *mode) {
+	XClk_Wiz_Config conf;
+	XClk_Wiz_CfgInitialize(&clkwiz, &conf, XPAR_CLK_WIZ_0_BASEADDR);
+
+	u32 phase = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x20C);
+	u32 duty = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x210);
+	u32 divide = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x208);
+	u32 muldiv = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200);
+
+	u32 mul = mode->mul;
+	u32 div = mode->div;
+	u32 otherdiv = mode->div2;
+
+	XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200, (mul << 8) | div);
+	XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR, 0x208, otherdiv);
+
+	// load configuration
+	XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR, 0x25C, 0x00000003);
+	//XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR,  0x25C, 0x00000001);
+
+	phase = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x20C);
+	printf("CLK phase: %lu\n", phase);
+	duty = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x210);
+	printf("CLK duty: %lu\n", duty);
+	divide = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x208);
+	printf("CLK divide: %lu\n", divide);
+	muldiv = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200);
+	printf("CLK muldiv: %lu\n", muldiv);
+}
+
 // FIXME!
 #define MNTZ_BASE_ADDR 0x43C00000
 
@@ -545,6 +577,28 @@ void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
 	//dump_vdma_status(&vdma);
 }
 
+void video_system_init_2(struct zz_video_mode *mode, int hdiv, int vdiv) {
+
+	printf("VSI: %d x %d [%d x %d] %d MHz %d Hz, hdiv: %d vdiv: %d\n", mode->hres,
+			mode->vres, mode->hmax, mode->vmax, mode->mhz, mode->vhz, hdiv, vdiv);
+
+	printf("pixelclock_init()...\n");
+	pixelclock_init_2(mode);
+	printf("...done.\n");
+
+	printf("hdmi_set_video_mode()...\n");
+	//hdmi_set_video_mode(hres, vres, mhz, vhz, hdmi);
+
+	printf("hdmi_ctrl_init()...\n");
+	hdmi_ctrl_init();
+
+	printf("init_vdma()...\n");
+	init_vdma(mode->hres, mode->vres, hdiv, vdiv);
+	printf("...done.\n");
+
+	//dump_vdma_status(&vdma);
+}
+
 // Our address space is relative to the autoconfig base address (for example, it could be 0x600000)
 #define MNT_REG_BASE    			0x000000
 // Frame buffer/graphics memory starts at 64KB, leaving ample space for general purpose registers.
@@ -568,9 +622,10 @@ void video_mode_init(int mode, int scalemode, int colormode) {
 
 	struct zz_video_mode *vmode = &preset_video_modes[mode];
 
-	video_system_init(vmode->hres, vmode->vres, vmode->hmax,
+	video_system_init_2(vmode, hdiv, vdiv);
+	/*video_system_init(vmode->hres, vmode->vres, vmode->hmax,
 			vmode->vmax, vmode->mhz, vmode->vhz,
-			hdiv, vdiv, vmode->hdmi);
+			hdiv, vdiv, vmode->hdmi);*/
 
 	video_formatter_init(scalemode, colormode,
 			vmode->hres, vmode->vres,
@@ -1073,15 +1128,13 @@ int main() {
 				case REG_ZZ_MODE:
 					printf("mode change: %lx\n", zdata);
 
-					if (video_mode != zdata) {
-						int mode = zdata & 0xff;
-						colormode = (zdata & 0xf00) >> 8;
-						scalemode = (zdata & 0xf000) >> 12;
-						printf("mode: %d color: %d scale: %d\n", mode,
-								colormode, scalemode);
+					int mode = zdata & 0xff;
+					colormode = (zdata & 0xf00) >> 8;
+					scalemode = (zdata & 0xf000) >> 12;
+					printf("mode: %d color: %d scale: %d\n", mode,
+							colormode, scalemode);
 
-						video_mode_init(mode, scalemode, colormode);
-					}
+					video_mode_init(mode, scalemode, colormode);
 					// remember selected video mode
 					video_mode = zdata;
 					break;
