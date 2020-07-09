@@ -29,6 +29,7 @@
 #include "xil_cache.h"
 #include "xclk_wiz.h"
 #include "xil_exception.h"
+#include "xtime_l.h"
 
 #include "gfx.h"
 #include "ethernet.h"
@@ -605,7 +606,7 @@ void video_system_init_2(struct zz_video_mode *mode, int hdiv, int vdiv) {
 #define MNT_FB_BASE     			0x010000
 
 #define REVISION_MAJOR 1
-#define REVISION_MINOR 6
+#define REVISION_MINOR 7
 
 void video_mode_init(int mode, int scalemode, int colormode) {
 	int hdiv = 1, vdiv = 1;
@@ -1016,6 +1017,8 @@ int main() {
 	int interrupt_enabled = 0;
 
 	int request_video_align=0;
+	int old_vblank = 0;
+	XTime time1 = 0, time2 = 0;
 	int vblank=0;
 
 	int custom_video_mode = ZZVMODE_CUSTOM;
@@ -1269,6 +1272,201 @@ int main() {
 					rect_rgb2 |= (((zdata & 0xff) << 8) | zdata >> 8) << 16;
 					break;
 
+				#define SWAP16(a) a = __builtin_bswap16(a);
+				#define SWAP32(a) a = __builtin_bswap32(a);
+
+				// DMA RTG rendering
+				case REG_ZZ_BITTER_DMA_OP: {
+					struct GFXData *data = (struct GFXData*)((u32)Z3_SCRATCH_ADDR);
+					switch(zdata) {
+						// DrawLine
+						case OP_DRAWLINE:
+							SWAP16(data->x[0]);
+							SWAP16(data->x[1]);
+							SWAP16(data->y[0]);
+							SWAP16(data->y[1]);
+							SWAP16(data->user[0]);
+							SWAP16(data->user[1]);
+
+							SWAP16(data->pitch[0]);
+							SWAP32(data->offset[0]);
+
+							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
+									data->pitch[0]);
+
+							if (data->user[1] == 0xFFFF && data->mask == 0xFF)
+								draw_line_solid(data->x[0], data->y[0], data->x[1], data->y[1],
+										data->user[0], data->rgb[0],
+										data->u8_user[GFXDATA_U8_COLORMODE]);
+							else
+								draw_line(data->x[0], data->y[0], data->x[1], data->y[1],
+										data->user[0], data->user[1], data->user[2], data->rgb[0], data->rgb[1],
+										data->u8_user[GFXDATA_U8_COLORMODE], data->mask, data->u8_user[GFXDATA_U8_DRAWMODE]);
+							
+							break;
+						
+						// FillRect
+						case OP_FILLRECT:
+							SWAP16(data->x[0]);
+							SWAP16(data->x[1]);
+							SWAP16(data->y[0]);
+							SWAP16(data->y[1]);
+
+							SWAP16(data->pitch[0]);
+							SWAP32(data->offset[0]);
+
+							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
+									data->pitch[0]);
+
+							if (data->mask == 0xFF)
+								fill_rect_solid(data->x[0], data->y[0], data->x[1], data->y[1],
+										data->rgb[0], data->u8_user[GFXDATA_U8_COLORMODE]);
+							else
+								fill_rect(data->x[0], data->y[0], data->x[1], data->y[1], data->rgb[0],
+										data->u8_user[GFXDATA_U8_COLORMODE], data->mask);
+							break;
+
+						// CopyRect / CopyRectNoMaskComplete
+						case OP_COPYRECT:
+						case OP_COPYRECT_NOMASK:
+							SWAP16(data->x[0]);
+							SWAP16(data->x[1]);
+							SWAP16(data->x[2]);
+							SWAP16(data->y[0]);
+							SWAP16(data->y[1]);
+							SWAP16(data->y[2]);
+
+							SWAP16(data->pitch[0]);
+							SWAP16(data->pitch[1]);
+							SWAP32(data->offset[0]);
+							SWAP32(data->offset[1]);
+
+							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
+									data->pitch[0]);
+
+							switch (zdata) {
+							case 3: // Regular BlitRect
+								if (data->mask == 0xFF || (data->mask != 0xFF && data->u8_user[GFXDATA_U8_COLORMODE] != MNTVA_COLOR_8BIT))
+									copy_rect_nomask(data->x[0], data->y[0], data->x[1], data->y[1], data->x[2],
+													data->y[2], data->u8_user[GFXDATA_U8_COLORMODE],
+													(uint32_t*) ((u32) framebuffer + data->offset[0]),
+													data->pitch[0], MINTERM_SRC);
+								else 
+									copy_rect(data->x[0], data->y[0], data->x[1], data->y[1], data->x[2],
+											data->y[2], data->u8_user[GFXDATA_U8_COLORMODE],
+											(uint32_t*) ((u32) framebuffer + data->offset[0]),
+											data->pitch[0], data->mask);
+								break;
+							case 4: // BlitRectNoMaskComplete
+								copy_rect_nomask(data->x[0], data->y[0], data->x[1], data->y[1], data->x[2],
+												data->y[2], data->u8_user[GFXDATA_U8_COLORMODE],
+												(uint32_t*) ((u32) framebuffer + data->offset[1]),
+												data->pitch[1], data->minterm);
+								break;
+							}
+							break;
+
+						// FillTemplate / FillPattern
+						case OP_RECT_PATTERN:
+						case OP_RECT_TEMPLATE: {
+							SWAP16(data->x[0]);
+							SWAP16(data->x[1]);
+							SWAP16(data->x[2]);
+							SWAP16(data->y[0]);
+							SWAP16(data->y[1]);
+							SWAP16(data->y[2]);
+
+							SWAP16(data->pitch[0]);
+							SWAP16(data->pitch[1]);
+							SWAP32(data->offset[0]);
+							SWAP32(data->offset[1]);
+
+							uint8_t* tmpl_data = (uint8_t*) ((u32) framebuffer
+									+ data->offset[1]);
+							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
+									data->pitch[0]);
+
+							uint8_t bpp = 2 * data->u8_user[GFXDATA_U8_COLORMODE];
+							if (bpp == 0)
+								bpp = 1;
+							uint16_t loop_rows = 0;
+
+							if (zdata == OP_RECT_PATTERN) {
+								SWAP16(data->user[0]);
+								loop_rows = data->user[0];
+								pattern_fill_rect(data->u8_user[GFXDATA_U8_COLORMODE], data->x[0],
+										data->y[0], data->x[1], data->y[1], data->u8_user[GFXDATA_U8_DRAWMODE], data->mask,
+										data->rgb[0], data->rgb[1], data->x[2], data->y[2], tmpl_data,
+										16, loop_rows);
+							}
+							else {
+								template_fill_rect(data->u8_user[GFXDATA_U8_COLORMODE], data->x[0],
+										data->y[0], data->x[1], data->y[1], data->u8_user[GFXDATA_U8_DRAWMODE], data->mask,
+										data->rgb[0], data->rgb[1], data->x[2], data->y[2], tmpl_data,
+										data->pitch[1]);
+							}
+							
+							break;
+						}
+
+						// P2C / P2D
+						case OP_P2C:
+						case OP_P2D: {
+							SWAP16(data->x[0]);
+							SWAP16(data->x[1]);
+							SWAP16(data->x[2]);
+							SWAP16(data->y[0]);
+							SWAP16(data->y[1]);
+							SWAP16(data->y[2]);
+
+							SWAP16(data->pitch[0]);
+							SWAP16(data->pitch[1]);
+							SWAP32(data->offset[0]);
+							SWAP32(data->offset[1]);
+							SWAP16(data->user[0]);
+							SWAP16(data->user[1]);
+
+							uint8_t* bmp_data = (uint8_t*) ((u32) framebuffer
+									+ data->offset[1]);
+
+							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
+									data->pitch[0]);
+
+							if (zdata == OP_P2C) {
+								p2c_rect(data->x[0], 0, data->x[1], data->y[1], data->x[2],
+										data->y[2], data->minterm, data->user[1], data->mask,
+										data->user[0], data->pitch[1], bmp_data);
+							}
+							else {
+								SWAP32(data->rgb[0]);
+								p2d_rect(data->x[0], 0, data->x[1], data->y[1], data->x[2],
+										data->y[2], data->minterm, data->user[1], data->mask, data->user[0],
+										data->rgb[0], data->pitch[1], bmp_data, data->u8_user[GFXDATA_U8_COLORMODE]);
+							}
+							break;
+						}
+
+						case OP_INVERTRECT:
+							SWAP16(data->x[0]);
+							SWAP16(data->x[1]);
+							SWAP16(data->y[0]);
+							SWAP16(data->y[1]);
+
+							SWAP16(data->pitch[0]);
+							SWAP32(data->offset[0]);
+
+							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
+									data->pitch[0]);
+							invert_rect(data->x[0], data->y[0], data->x[1], data->y[1],
+									data->mask, data->u8_user[GFXDATA_U8_COLORMODE]);
+							break;
+
+						default:
+							break;
+					}
+					break;
+				}
+
 				// RTG rendering
 				case REG_ZZ_FILLRECT:
 					set_fb((uint32_t*) ((u32) framebuffer + blitter_dst_offset),
@@ -1401,7 +1599,6 @@ int main() {
 					uint8_t draw_mode = blitter_colormode >> 8;
 					uint8_t planes = (zdata & 0xFF00) >> 8;
 					uint8_t mask = (zdata & 0xFF);
-					uint16_t num_rows = blitter_user1;
 					uint8_t layer_mask = blitter_user2;
 					uint8_t* bmp_data = (uint8_t*) ((u32) framebuffer
 							+ blitter_src_offset);
@@ -1410,7 +1607,7 @@ int main() {
 							blitter_dst_pitch);
 
 					p2c_rect(rect_x1, 0, rect_x2, rect_y2, rect_x3,
-							rect_y3, num_rows, draw_mode, planes, mask,
+							rect_y3, draw_mode, planes, mask,
 							layer_mask, blitter_src_pitch, bmp_data);
 					break;
 				}
@@ -1419,7 +1616,6 @@ int main() {
 					uint8_t draw_mode = blitter_colormode >> 8;
 					uint8_t planes = (zdata & 0xFF00) >> 8;
 					uint8_t mask = (zdata & 0xFF);
-					uint16_t num_rows = blitter_user1;
 					uint8_t layer_mask = blitter_user2;
 					uint8_t* bmp_data = (uint8_t*) ((u32) framebuffer
 							+ blitter_src_offset);
@@ -1427,7 +1623,7 @@ int main() {
 					set_fb((uint32_t*) ((u32) framebuffer + blitter_dst_offset),
 							blitter_dst_pitch);
 					p2d_rect(rect_x1, 0, rect_x2, rect_y2, rect_x3,
-							rect_y3, num_rows, draw_mode, planes, mask, layer_mask, rect_rgb,
+							rect_y3, draw_mode, planes, mask, layer_mask, rect_rgb,
 							blitter_src_pitch, bmp_data, (blitter_colormode & 0x0F));
 					break;
 				}

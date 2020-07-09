@@ -53,8 +53,8 @@ void pattern_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y1
 void draw_line(int16_t rect_x1, int16_t rect_y1, int16_t rect_x2, int16_t rect_y2, uint16_t len, uint16_t pattern, uint16_t pattern_offset, uint32_t fg_color, uint32_t bg_color, uint32_t color_format, uint8_t mask, uint8_t draw_mode);
 void draw_line_solid(int16_t rect_x1, int16_t rect_y1, int16_t rect_x2, int16_t rect_y2, uint16_t len, uint32_t fg_color, uint32_t color_format);
 
-void p2c_rect(int16_t sx, int16_t sy, int16_t dx, int16_t dy, int16_t w, int16_t h, uint16_t sh, uint8_t draw_mode, uint8_t planes, uint8_t mask, uint8_t layer_mask, uint16_t src_line_pitch, uint8_t *bmp_data_src);
-void p2d_rect(int16_t sx, int16_t sy, int16_t dx, int16_t dy, int16_t w, int16_t h, uint16_t sh, uint8_t draw_mode, uint8_t planes, uint8_t mask, uint8_t layer_mask, uint32_t color_mask, uint16_t src_line_pitch, uint8_t *bmp_data_src, uint32_t color_format);
+void p2c_rect(int16_t sx, int16_t sy, int16_t dx, int16_t dy, int16_t w, int16_t h, uint8_t draw_mode, uint8_t planes, uint8_t mask, uint8_t layer_mask, uint16_t src_line_pitch, uint8_t *bmp_data_src);
+void p2d_rect(int16_t sx, int16_t sy, int16_t dx, int16_t dy, int16_t w, int16_t h, uint8_t draw_mode, uint8_t planes, uint8_t mask, uint8_t layer_mask, uint32_t color_mask, uint16_t src_line_pitch, uint8_t *bmp_data_src, uint32_t color_format);
 void invert_rect(uint16_t rect_x1, uint16_t rect_y1, uint16_t w, uint16_t h, uint8_t mask, uint32_t color_format);
 
 #define MNTVA_COLOR_8BIT     0
@@ -490,3 +490,40 @@ enum gfx_minterm_modes {
 					d[x] |= (s & color_mask); break; \
 			} break; \
 	}
+
+#pragma pack(4)
+struct GFXData {
+  uint32_t offset[2];
+  uint32_t rgb[2];
+  uint16_t x[4], y[4];
+  uint16_t user[4];
+  uint16_t pitch[4];
+  uint8_t u8_user[8];
+  uint8_t op, mask, minterm, u8offset;
+};
+
+enum gfx_dma_op {
+  OP_NONE,
+  OP_DRAWLINE,
+  OP_FILLRECT,
+  OP_COPYRECT,
+  OP_COPYRECT_NOMASK,
+  OP_RECT_TEMPLATE,
+  OP_RECT_PATTERN,
+  OP_P2C,
+  OP_P2D,
+  OP_INVERTRECT,
+  OP_NUM,
+};
+
+enum gfxdata_offsets {
+  GFXDATA_DST,
+  GFXDATA_SRC,
+};
+
+enum gfxdata_u8_types {
+  GFXDATA_U8_COLORMODE,
+  GFXDATA_U8_DRAWMODE,
+  GFXDATA_U8_LINE_PATTERN_OFFSET,
+  GFXDATA_U8_LINE_PADDING,
+};
