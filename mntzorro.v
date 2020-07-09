@@ -19,8 +19,8 @@
  */
 
 // ZORRO2/3 switch
-`define ZORRO2
-//`define ZORRO3
+//`define ZORRO2
+`define ZORRO3
 
 // use together with ZORRO2:
 //`define VARIANT_ZZ9500
@@ -36,6 +36,7 @@
 `define Z3_RAM_SIZE 32'h10000000 // 256MB for Zorro 3
 `define ARM_MEMORY_START 32'h001f0000
 `define VIDEOCAP_ADDR 32'h01000000 // ARM_MEMORY_START+0xe0_0000
+`define TX_FRAME_ADDRESS 32'h03110000
 
 `define C_M00_AXI_TARGET_SLAVE_BASE_ADDR 32'h10000000
 `define C_M00_AXI_ID_WIDTH   1
@@ -1919,12 +1920,26 @@ module MNTZorro_v0_1_S00_AXI
 `ifdef VARIANT_FW20
           zorro_state <= Z3_WRITE_UPPER;
 `else
-          if (z3_mapped_addr<'h10000)
+          if ( (z3_mapped_addr>='h8000)&&(z3_mapped_addr<'hA000) )
+            zorro_state <= WAIT_WRITE_DMA_Z3;
+          else if (z3_mapped_addr<'h10000)
             zorro_state <= Z3_WRITE_UPPER;
           else
             zorro_state <= WAIT_WRITE_DMA_Z3;
 `endif
         end
+
+        /*Z3_WRITE_PRE2: begin
+          // FIXME DMA temporarily disabled for FW2.0
+`ifdef VARIANT_FW20
+          zorro_state <= Z3_WRITE_UPPER;
+`else
+          if (z3_mapped_addr<'h10000)
+            zorro_state <= Z3_WRITE_UPPER;
+          else
+            zorro_state <= WAIT_WRITE_DMA_Z3;
+`endif
+        end*/
         
         Z3_WRITE_UPPER: begin
           last_z3addr <= z3_mapped_addr;
@@ -1968,7 +1983,14 @@ module MNTZorro_v0_1_S00_AXI
 
         WAIT_WRITE_DMA_Z3: begin
           m00_axi_wstrb_z3   <= {z3_ds0, z3_ds1, z3_ds2, z3_ds3};
-          m00_axi_awaddr_z3  <= `ARM_MEMORY_START + (z3_mapped_addr/*&32'hfffffffc*/); // max 256MB
+          if ( (z3_mapped_addr>='h8000)&&(z3_mapped_addr<'hA000) )
+            m00_axi_awaddr_z3 <= (`TX_FRAME_ADDRESS - 32'h8000) + z3_mapped_addr;
+          else
+            m00_axi_awaddr_z3  <= `ARM_MEMORY_START + (z3_mapped_addr); // max 256MB
+
+        /*WAIT_WRITE_DMA_Z3: begin
+          m00_axi_wstrb_z3   <= {z3_ds0, z3_ds1, z3_ds2, z3_ds3};
+          m00_axi_awaddr_z3  <= `ARM_MEMORY_START + (z3_mapped_addr); // max 256MB */
           m00_axi_wdata_z3   <= {z3_din_low_s2[7:0], z3_din_low_s2[15:8], z3_din_high_s2[7:0], z3_din_high_s2[15:8]};
           
           m00_axi_awvalid_z3  <= 1;
@@ -2033,7 +2055,7 @@ module MNTZorro_v0_1_S00_AXI
             end*/
             'h00: begin
               // this flag is read by Amiga software to check if all writes are done
-              rr_data <= 0; //zorro_ram_write_request;
+              rr_data <= video_control_vblank << 16; //zorro_ram_write_request;
             end
             default: begin
               rr_data[31:16] <= REVISION;
