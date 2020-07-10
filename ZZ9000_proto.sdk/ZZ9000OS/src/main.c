@@ -1023,6 +1023,9 @@ int main() {
 
 	int custom_video_mode = ZZVMODE_CUSTOM;
 	int custom_vmode_param = VMODE_PARAM_HRES;
+	uint8_t debug_dma_op[OP_NUM];
+
+	memset(debug_dma_op, 0x00, OP_NUM);
 
 	while (1) {
 		u32 zstate = mntzorro_read(MNTZ_BASE_ADDR, MNTZORRO_REG3);
@@ -1279,14 +1282,10 @@ int main() {
 				case REG_ZZ_BITTER_DMA_OP: {
 					struct GFXData *data = (struct GFXData*)((u32)Z3_SCRATCH_ADDR);
 					switch(zdata) {
-						// DrawLine
 						case OP_DRAWLINE:
-							SWAP16(data->x[0]);
-							SWAP16(data->x[1]);
-							SWAP16(data->y[0]);
-							SWAP16(data->y[1]);
-							SWAP16(data->user[0]);
-							SWAP16(data->user[1]);
+							SWAP16(data->x[0]);		SWAP16(data->x[1]);
+							SWAP16(data->y[0]);		SWAP16(data->y[1]);
+							SWAP16(data->user[0]);	SWAP16(data->user[1]);
 
 							SWAP16(data->pitch[0]);
 							SWAP32(data->offset[0]);
@@ -1305,12 +1304,9 @@ int main() {
 							
 							break;
 						
-						// FillRect
 						case OP_FILLRECT:
-							SWAP16(data->x[0]);
-							SWAP16(data->x[1]);
-							SWAP16(data->y[0]);
-							SWAP16(data->y[1]);
+							SWAP16(data->x[0]);		SWAP16(data->x[1]);
+							SWAP16(data->y[0]);		SWAP16(data->y[1]);
 
 							SWAP16(data->pitch[0]);
 							SWAP32(data->offset[0]);
@@ -1326,20 +1322,13 @@ int main() {
 										data->u8_user[GFXDATA_U8_COLORMODE], data->mask);
 							break;
 
-						// CopyRect / CopyRectNoMaskComplete
 						case OP_COPYRECT:
 						case OP_COPYRECT_NOMASK:
-							SWAP16(data->x[0]);
-							SWAP16(data->x[1]);
-							SWAP16(data->x[2]);
-							SWAP16(data->y[0]);
-							SWAP16(data->y[1]);
-							SWAP16(data->y[2]);
+							SWAP16(data->x[0]);		SWAP16(data->x[1]);		SWAP16(data->x[2]);
+							SWAP16(data->y[0]);		SWAP16(data->y[1]);		SWAP16(data->y[2]);
 
-							SWAP16(data->pitch[0]);
-							SWAP16(data->pitch[1]);
-							SWAP32(data->offset[0]);
-							SWAP32(data->offset[1]);
+							SWAP16(data->pitch[0]);		SWAP16(data->pitch[1]);
+							SWAP32(data->offset[0]);	SWAP32(data->offset[1]);
 
 							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
 									data->pitch[0]);
@@ -1366,25 +1355,19 @@ int main() {
 							}
 							break;
 
-						// FillTemplate / FillPattern
 						case OP_RECT_PATTERN:
 						case OP_RECT_TEMPLATE: {
-							SWAP16(data->x[0]);
-							SWAP16(data->x[1]);
-							SWAP16(data->x[2]);
-							SWAP16(data->y[0]);
-							SWAP16(data->y[1]);
-							SWAP16(data->y[2]);
+							SWAP16(data->x[0]);		SWAP16(data->x[1]);		SWAP16(data->x[2]);
+							SWAP16(data->y[0]);		SWAP16(data->y[1]);		SWAP16(data->y[2]);
 
-							SWAP16(data->pitch[0]);
-							SWAP16(data->pitch[1]);
-							SWAP32(data->offset[0]);
-							SWAP32(data->offset[1]);
+							SWAP16(data->pitch[0]);		SWAP16(data->pitch[1]);
+							SWAP32(data->offset[0]);	SWAP32(data->offset[1]);
 
 							uint8_t* tmpl_data = (uint8_t*) ((u32) framebuffer
 									+ data->offset[1]);
 							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
 									data->pitch[0]);
+
 
 							uint8_t bpp = 2 * data->u8_user[GFXDATA_U8_COLORMODE];
 							if (bpp == 0)
@@ -1393,13 +1376,28 @@ int main() {
 
 							if (zdata == OP_RECT_PATTERN) {
 								SWAP16(data->user[0]);
+
 								loop_rows = data->user[0];
-								pattern_fill_rect(data->u8_user[GFXDATA_U8_COLORMODE], data->x[0],
-										data->y[0], data->x[1], data->y[1], data->u8_user[GFXDATA_U8_DRAWMODE], data->mask,
-										data->rgb[0], data->rgb[1], data->x[2], data->y[2], tmpl_data,
-										16, loop_rows);
+
+								if (debug_dma_op[zdata]) {
+									printf("RectPattern:\n");
+									printf("%d, %d - %d, %d\n", data->x[0], data->y[0], data->x[0]+data->x[1], data->y[0]+data->y[1]);
+									printf("M:%.2X R: %d D: %d\n", data->mask, data->user[0], data->u8_user[GFXDATA_U8_DRAWMODE]);
+								}
+
+								pattern_fill_rect(data->u8_user[GFXDATA_U8_COLORMODE],
+										data->x[0], data->y[0], data->x[1], data->y[1],
+										data->u8_user[GFXDATA_U8_DRAWMODE], data->mask,
+										data->rgb[0], data->rgb[1], data->x[2], data->y[2],
+										tmpl_data, 16, loop_rows);
 							}
 							else {
+								if (debug_dma_op[zdata]) {
+									printf("RectTemplate:\n");
+									printf("%d, %d - %d, %d\n", data->x[0], data->y[0], data->x[0]+data->x[1], data->y[0]+data->y[1]);
+									printf("M:%.2X R: %d D: %d\n", data->mask, data->user[0], data->u8_user[GFXDATA_U8_DRAWMODE]);
+								}
+
 								template_fill_rect(data->u8_user[GFXDATA_U8_COLORMODE], data->x[0],
 										data->y[0], data->x[1], data->y[1], data->u8_user[GFXDATA_U8_DRAWMODE], data->mask,
 										data->rgb[0], data->rgb[1], data->x[2], data->y[2], tmpl_data,
@@ -1409,20 +1407,14 @@ int main() {
 							break;
 						}
 
-						// P2C / P2D
 						case OP_P2C:
 						case OP_P2D: {
-							SWAP16(data->x[0]);
-							SWAP16(data->x[1]);
-							SWAP16(data->x[2]);
-							SWAP16(data->y[0]);
-							SWAP16(data->y[1]);
-							SWAP16(data->y[2]);
+							SWAP16(data->x[0]);		SWAP16(data->x[1]);		SWAP16(data->x[2]);
+							SWAP16(data->y[0]);		SWAP16(data->y[1]);		SWAP16(data->y[2]);
 
-							SWAP16(data->pitch[0]);
-							SWAP16(data->pitch[1]);
-							SWAP32(data->offset[0]);
-							SWAP32(data->offset[1]);
+							SWAP16(data->pitch[0]);		SWAP16(data->pitch[1]);
+							SWAP32(data->offset[0]);	SWAP32(data->offset[1]);
+
 							SWAP16(data->user[0]);
 							SWAP16(data->user[1]);
 
@@ -1447,10 +1439,8 @@ int main() {
 						}
 
 						case OP_INVERTRECT:
-							SWAP16(data->x[0]);
-							SWAP16(data->x[1]);
-							SWAP16(data->y[0]);
-							SWAP16(data->y[1]);
+							SWAP16(data->x[0]);		SWAP16(data->x[1]);
+							SWAP16(data->y[0]);		SWAP16(data->y[1]);
 
 							SWAP16(data->pitch[0]);
 							SWAP32(data->offset[0]);
@@ -1459,6 +1449,79 @@ int main() {
 									data->pitch[0]);
 							invert_rect(data->x[0], data->y[0], data->x[1], data->y[1],
 									data->mask, data->u8_user[GFXDATA_U8_COLORMODE]);
+							break;
+
+						case OP_SPRITE_XY:
+							if (!sprite_enabled)
+								break;
+
+							SWAP16(data->x[0]);
+							SWAP16(data->y[0]);
+
+							sprite_x = (int16_t)data->x[0] + sprite_x_offset + 3;
+							// horizontally doubled mode
+							if (scalemode & 1) sprite_x *=2;
+							sprite_x_adj = sprite_x;
+
+							sprite_y = (int16_t)data->y[0] + sprite_y_offset + 1;
+							// vertically doubled mode
+							if (scalemode & 2) sprite_y *= 2;
+							sprite_y_adj = sprite_y;
+
+							if (sprite_x < 0 || sprite_y < 0) {
+								if (sprite_clip_x != sprite_x || sprite_clip_y != sprite_y) {
+									clip_hw_sprite((sprite_x < 0) ? sprite_x : 0, (sprite_y < 0) ? sprite_y : 0);
+								}
+								sprite_clipped = 1;
+								if (sprite_x < 0) {
+									sprite_x_adj = 0;
+									sprite_clip_x = sprite_x;
+								}
+								if (sprite_y < 0) {
+									sprite_y_adj = 0;
+									sprite_clip_y = sprite_y;
+								}
+							}
+							else if (sprite_clipped && sprite_x >= 0 && sprite_y >= 0) {
+								clip_hw_sprite(0, 0);
+								sprite_clipped = 0;
+							}
+							video_formatter_write((sprite_y_adj << 16) | sprite_x_adj, MNTVF_OP_SPRITE_XY);
+							break;
+						case OP_SPRITE_BITMAP: {
+							SWAP16(data->x[0]);		SWAP16(data->x[1]);
+							SWAP16(data->y[0]);		SWAP16(data->y[1]);
+
+							SWAP32(data->offset[1]);
+
+							uint8_t* bmp_data = (uint8_t*) ((u32) framebuffer
+									+ data->offset[1]);
+
+							clear_hw_sprite();
+							
+							sprite_x_offset = data->x[0];
+							sprite_y_offset = data->y[0];
+							sprite_width  = data->x[1];
+							sprite_height = data->y[1];
+
+							update_hw_sprite(bmp_data, sprite_colors, sprite_width, sprite_height);
+							break;
+						}
+						case OP_SPRITE_COLOR: {
+							sprite_colors[data->u8offset] = data->rgb[0];
+							if (sprite_colors[data->u8offset] == 0xff00ff) sprite_colors[data->u8offset] = 0xfe00fe;
+							break;
+						}
+
+						case OP_PAN:
+							SWAP32(data->offset[0]);
+
+							framebuffer_pan_offset = data->offset[0];
+							if (framebuffer_pan_offset != framebuffer_pan_offset_old) {
+								// VDMA will be reinitialized on the next vertical blank
+								request_video_align = 1;
+								framebuffer_pan_offset_old = framebuffer_pan_offset;
+							}
 							break;
 
 						default:
@@ -1553,7 +1616,6 @@ int main() {
 								 (uint32_t*) ((u32)Z3_SCRATCH_ADDR + (i * rect_x1)),
 								 rect_x1);
 					}
-					Xil_DCacheFlush();
 					break;
 				}
 
@@ -1727,7 +1789,9 @@ int main() {
 					break;
 				}
 				case REG_ZZ_DEBUG: {
-					debug_lowlevel = zdata;
+					//debug_lowlevel = zdata;
+					debug_dma_op[zdata] = !debug_dma_op[zdata];
+					printf("Debug for DMA RTG op %d %s.\n", zdata, (debug_dma_op[zdata]) ? "Enabled" : "Disabled");
 					break;
 				}
 

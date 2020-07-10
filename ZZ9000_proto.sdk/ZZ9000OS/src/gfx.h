@@ -513,6 +513,10 @@ enum gfx_dma_op {
   OP_P2C,
   OP_P2D,
   OP_INVERTRECT,
+  OP_PAN,
+  OP_SPRITE_XY,
+  OP_SPRITE_COLOR,
+  OP_SPRITE_BITMAP,
   OP_NUM,
 };
 
