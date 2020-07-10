@@ -774,7 +774,7 @@ void pattern_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y1
 			cur_byte = (inversion) ? tmpl_data[tmpl_x] ^ 0xFF : tmpl_data[tmpl_x];
 
 			while (x < rect_x2) {
-				if (cur_bit == 0x80 && x < rect_x2 - 8) {
+				if (w >= 8 && cur_bit == 0x80 && x < rect_x2 - 8) {
 					if (mask == 0xFF) {
 						SET_FG_PIXELS;
 					}
@@ -807,7 +807,7 @@ void pattern_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y1
 			cur_byte = (inversion) ? tmpl_data[tmpl_x] ^ 0xFF : tmpl_data[tmpl_x];
 
 			while (x < rect_x2) {
-				if (cur_bit == 0x80 && x < rect_x2 - 8) {
+				if (w >= 8 && cur_bit == 0x80 && x < rect_x2 - 8) {
 					if (mask == 0xFF) {
 						SET_FG_OR_BG_PIXELS;
 					}
@@ -870,7 +870,7 @@ engage_cheat_codes:;
 			cur_byte = (inversion) ? tmpl_data[tmpl_x] ^ 0xFF : tmpl_data[tmpl_x];
 
 			while (x < rect_x2) {
-				if (cur_bit == 0x80 && x < rect_x2 - 8) {
+				if (w >= 8 && cur_bit == 0x80 && x < rect_x2 - 8) {
 					INVERT_PIXELS;
 					x += 8;
 				}
@@ -931,7 +931,7 @@ void template_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y
 			cur_byte = (inversion) ? tmpl_data[tmpl_x] ^ 0xFF : tmpl_data[tmpl_x];
 
 			while (x < rect_x2) {
-				if (cur_bit == 0x80 && x < rect_x2 - 8) {
+				if (w >= 8 && cur_bit == 0x80 && x < rect_x2 - 8) {
 					if (mask == 0xFF) {
 						SET_FG_PIXELS;
 					}
@@ -964,7 +964,7 @@ void template_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y
 			cur_byte = (inversion) ? tmpl_data[tmpl_x] ^ 0xFF : tmpl_data[tmpl_x];
 
 			while (x < rect_x2) {
-				if (cur_bit == 0x80 && x < rect_x2 - 8) {
+				if (w >= 8 && cur_bit == 0x80 && x < rect_x2 - 8) {
 					if (mask == 0xFF) {
 						SET_FG_OR_BG_PIXELS;
 					}
@@ -999,7 +999,7 @@ void template_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y
 
 			cur_byte = (inversion) ? tmpl_data[tmpl_x] ^ 0xFF : tmpl_data[tmpl_x];
 
-			while (x < rect_x2) {
+			while (w >= 8 && x < rect_x2) {
 				if (cur_bit == 0x80 && x < rect_x2 - 8) {
 					INVERT_PIXELS;
 					x += 8;
