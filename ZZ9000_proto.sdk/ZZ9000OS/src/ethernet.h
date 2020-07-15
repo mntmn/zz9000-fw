@@ -19,7 +19,7 @@
 
 int ethernet_init();
 u16 ethernet_send_frame(u16 frame_size);
-void ethernet_receive_frame();
+int ethernet_receive_frame();
 u32 get_frames_received();
 uint8_t* ethernet_get_mac_address_ptr();
 void ethernet_update_mac_address();

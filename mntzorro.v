@@ -28,7 +28,7 @@
 //`define VARIANT_FW20
 
 `define C_S_AXI_DATA_WIDTH 32
-`define C_S_AXI_ADDR_WIDTH 4
+`define C_S_AXI_ADDR_WIDTH 5
 `define RAM_SIZE 32'h400000 // 4MB for Zorro 2
 `define REG_SIZE 32'h01000
 `define AUTOCONF_LOW  24'he80000
@@ -37,6 +37,10 @@
 `define ARM_MEMORY_START 32'h001f0000
 `define VIDEOCAP_ADDR 32'h01000000 // ARM_MEMORY_START+0xe0_0000
 `define TX_FRAME_ADDRESS 32'h03110000
+`define RX_FRAME_ADDRESS 32'h03120000
+`define RX_BACKLOG_ADDRESS 32'h03200000
+`define FRAME_SIZE 24'h2048
+`define USB_BLOCK_STORAGE_ADDRESS 32'h04000000
 
 `define C_M00_AXI_TARGET_SLAVE_BASE_ADDR 32'h10000000
 `define C_M00_AXI_ID_WIDTH   1
@@ -268,7 +272,7 @@ module MNTZorro_v0_1_S00_AXI
   // ADDR_LSB = 2 for 32 bits (n downto 2)
   // ADDR_LSB = 3 for 64 bits (n downto 3)
   localparam integer ADDR_LSB = (`C_S_AXI_DATA_WIDTH/32) + 1;
-  localparam integer OPT_MEM_ADDR_BITS = 1;
+  localparam integer OPT_MEM_ADDR_BITS = 2;
   //----------------------------------------------
   //-- Signals for user logic register space example
   //------------------------------------------------
@@ -277,6 +281,8 @@ module MNTZorro_v0_1_S00_AXI
   reg [`C_S_AXI_DATA_WIDTH-1:0] slv_reg1;
   reg [`C_S_AXI_DATA_WIDTH-1:0] slv_reg2;
   reg [`C_S_AXI_DATA_WIDTH-1:0] slv_reg3;
+  reg [`C_S_AXI_DATA_WIDTH-1:0] slv_reg4;
+  reg [`C_S_AXI_DATA_WIDTH-1:0] slv_reg5;
   wire   slv_reg_rden;
   wire   slv_reg_wren;
   reg [`C_S_AXI_DATA_WIDTH-1:0]  reg_data_out;
@@ -398,44 +404,62 @@ module MNTZorro_v0_1_S00_AXI
           slv_reg1 <= 0;
           slv_reg2 <= 0;
           slv_reg3 <= 0;
-        end 
+          slv_reg4 <= 0;
+          slv_reg5 <= 0;
+        end
       else begin
         if (slv_reg_wren)
           begin
             case ( axi_awaddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] )
-              2'h0:
+              3'h0:
                 for ( byte_index = 0; byte_index <= (`C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
                   if ( S_AXI_WSTRB[byte_index] == 1 ) begin
                     // Respective byte enables are asserted as per write strobes 
                     // Slave register 0
                     slv_reg0[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
-                  end  
-              2'h1:
+                  end
+              3'h1:
                 for ( byte_index = 0; byte_index <= (`C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
                   if ( S_AXI_WSTRB[byte_index] == 1 ) begin
                     // Respective byte enables are asserted as per write strobes 
                     // Slave register 1
                     slv_reg1[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
-                  end  
-              2'h2:
+                  end
+              3'h2:
                 for ( byte_index = 0; byte_index <= (`C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
                   if ( S_AXI_WSTRB[byte_index] == 1 ) begin
                     // Respective byte enables are asserted as per write strobes 
                     // Slave register 2
                     slv_reg2[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
-                  end  
-              2'h3:
+                  end
+              3'h3:
                 for ( byte_index = 0; byte_index <= (`C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
                   if ( S_AXI_WSTRB[byte_index] == 1 ) begin
                     // Respective byte enables are asserted as per write strobes 
                     // Slave register 3
                     slv_reg3[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
-                  end  
+                  end
+              3'h4:
+                for ( byte_index = 0; byte_index <= (`C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
+                  if ( S_AXI_WSTRB[byte_index] == 1 ) begin
+                    // Respective byte enables are asserted as per write strobes 
+                    // Slave register 4
+                    slv_reg4[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
+                  end
+              3'h5:
+                for ( byte_index = 0; byte_index <= (`C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
+                  if ( S_AXI_WSTRB[byte_index] == 1 ) begin
+                    // Respective byte enables are asserted as per write strobes 
+                    // Slave register 4
+                    slv_reg5[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
+                  end
               default : begin
                 slv_reg0 <= slv_reg0;
                 slv_reg1 <= slv_reg1;
                 slv_reg2 <= slv_reg2;
                 slv_reg3 <= slv_reg3;
+                slv_reg4 <= slv_reg4;
+                slv_reg5 <= slv_reg5;
               end
             endcase
           end
@@ -637,6 +661,7 @@ module MNTZorro_v0_1_S00_AXI
   reg zorro_write;
   
   reg zorro_interrupt;
+  reg clear_interrupt;
   assign ZORRO_INT6 = zorro_interrupt;
   
   reg [15:0] data_in;
@@ -904,6 +929,10 @@ module MNTZorro_v0_1_S00_AXI
   reg [31:0] axi_reg1;
   reg [31:0] axi_reg2;
   reg [31:0] axi_reg3;
+  reg [31:0] axi_reg4;
+  reg [31:0] axi_reg5;
+  reg [31:0] frfb;
+  reg [31:0] usbb;
   
   reg [31:0] video_control_data_zorro;
   reg [7:0] video_control_op_zorro;
@@ -1841,7 +1870,7 @@ module MNTZorro_v0_1_S00_AXI
               data_z3_low16 <= default_data;
               slaven <= 1;
               
-              if (z3_mapped_addr<'h10000)
+              if (z3_mapped_addr<'h2000)
                 zorro_state <= Z3_READ_UPPER;
               else
                 zorro_state <= WAIT_READ_DMA_Z3;
@@ -1920,26 +1949,12 @@ module MNTZorro_v0_1_S00_AXI
 `ifdef VARIANT_FW20
           zorro_state <= Z3_WRITE_UPPER;
 `else
-          if ( (z3_mapped_addr>='h8000)&&(z3_mapped_addr<'hA000) )
-            zorro_state <= WAIT_WRITE_DMA_Z3;
-          else if (z3_mapped_addr<'h10000)
+          if (z3_mapped_addr<'h2000)
             zorro_state <= Z3_WRITE_UPPER;
           else
             zorro_state <= WAIT_WRITE_DMA_Z3;
 `endif
         end
-
-        /*Z3_WRITE_PRE2: begin
-          // FIXME DMA temporarily disabled for FW2.0
-`ifdef VARIANT_FW20
-          zorro_state <= Z3_WRITE_UPPER;
-`else
-          if (z3_mapped_addr<'h10000)
-            zorro_state <= Z3_WRITE_UPPER;
-          else
-            zorro_state <= WAIT_WRITE_DMA_Z3;
-`endif
-        end*/
         
         Z3_WRITE_UPPER: begin
           last_z3addr <= z3_mapped_addr;
@@ -1961,7 +1976,17 @@ module MNTZorro_v0_1_S00_AXI
         end
         
         WAIT_READ_DMA_Z3: begin
-          m00_axi_araddr  <= `ARM_MEMORY_START + (z3_mapped_addr/*&32'hfffffffc*/); // max 256MB
+          if ( (z3_mapped_addr>='hA000)&&(z3_mapped_addr<'h10000) )
+            m00_axi_araddr  <= (`USB_BLOCK_STORAGE_ADDRESS - 32'hA000) + z3_mapped_addr + {usbb[22:0],9'h0}; // 9'h0 is USB_BLOCK_SIZE = 512
+          else
+          if ( (z3_mapped_addr>='h8000)&&(z3_mapped_addr<'hA000) )
+            m00_axi_araddr  <= (`TX_FRAME_ADDRESS - 32'h8000) + z3_mapped_addr;
+          else
+          if ( (z3_mapped_addr>='h2000)&&(z3_mapped_addr<'h8000) ) begin
+            m00_axi_araddr  <= (`RX_BACKLOG_ADDRESS - 32'h2000) + z3_mapped_addr + {frfb[20:0],11'h0}; // 11'h0 is FRAME_SIZE = 2048
+            clear_interrupt<=1;
+          end else
+            m00_axi_araddr  <= `ARM_MEMORY_START + (z3_mapped_addr/*&32'hfffffffc*/); // max 256MB
           m00_axi_arvalid  <= 1;
 //          m00_axi_rready <= 1;
           if (m00_axi_arready) begin
@@ -1974,23 +1999,25 @@ module MNTZorro_v0_1_S00_AXI
 //          m00_axi_rready <= 1;
           if (m00_axi_rvalid) begin
             zorro_state <= Z3_ENDCYCLE;
-          data_z3_hi16 <= {m00_axi_rdata[7:0], m00_axi_rdata[15:8]};
-          data_z3_low16 <= {m00_axi_rdata[23:16], m00_axi_rdata[31:24]};
-          dataout_z3 <= 1; // enable data output
-          dtack <= 1;
+            data_z3_hi16 <= {m00_axi_rdata[7:0], m00_axi_rdata[15:8]};
+            data_z3_low16 <= {m00_axi_rdata[23:16], m00_axi_rdata[31:24]};
+            dataout_z3 <= 1; // enable data output
+            dtack <= 1;
           end
         end
 
         WAIT_WRITE_DMA_Z3: begin
           m00_axi_wstrb_z3   <= {z3_ds0, z3_ds1, z3_ds2, z3_ds3};
+          if ( (z3_mapped_addr>='hA000)&&(z3_mapped_addr<'h10000) )
+            m00_axi_awaddr_z3 <= (`USB_BLOCK_STORAGE_ADDRESS - 32'hA000) + z3_mapped_addr + {usbb[22:0],9'h0}; // 9'h0 is USB_BLOCK_SIZE = 512
+          else
           if ( (z3_mapped_addr>='h8000)&&(z3_mapped_addr<'hA000) )
             m00_axi_awaddr_z3 <= (`TX_FRAME_ADDRESS - 32'h8000) + z3_mapped_addr;
           else
-            m00_axi_awaddr_z3  <= `ARM_MEMORY_START + (z3_mapped_addr); // max 256MB
-
-        /*WAIT_WRITE_DMA_Z3: begin
-          m00_axi_wstrb_z3   <= {z3_ds0, z3_ds1, z3_ds2, z3_ds3};
-          m00_axi_awaddr_z3  <= `ARM_MEMORY_START + (z3_mapped_addr); // max 256MB */
+          if ( (z3_mapped_addr>='h2000)&&(z3_mapped_addr<'h8000) ) // this is marked in main.c as "FIXME remove"
+            m00_axi_awaddr_z3 <= (`RX_FRAME_ADDRESS - 32'h2000) + z3_mapped_addr;
+          else
+            m00_axi_awaddr_z3  <= `ARM_MEMORY_START + (z3_mapped_addr/*&32'hfffffffc*/); // max 256MB
           m00_axi_wdata_z3   <= {z3_din_low_s2[7:0], z3_din_low_s2[15:8], z3_din_high_s2[7:0], z3_din_high_s2[15:8]};
           
           m00_axi_awvalid_z3  <= 1;
@@ -2099,15 +2126,23 @@ module MNTZorro_v0_1_S00_AXI
     if (axi_reg2[30]==1'b1) begin
       zorro_interrupt <= axi_reg2[0];
     end
+    else if (clear_interrupt==1) begin
+      zorro_interrupt<=0;
+      clear_interrupt<=0;
+    end
 
     // read / write request acknowledged by ARM
     zorro_ram_read_flag  <= axi_reg0[30];
     zorro_ram_write_flag <= axi_reg0[31];
+    frfb <= axi_reg4;
+    usbb <= axi_reg5;
     
     axi_reg0 <= slv_reg0;
     axi_reg1 <= slv_reg1;
     axi_reg2 <= slv_reg2;
     axi_reg3 <= slv_reg3;
+    axi_reg4 <= slv_reg4;
+    axi_reg5 <= slv_reg5;
     
     if (video_control_axi) begin
       video_control_data <= video_control_data_axi;
@@ -2146,10 +2181,10 @@ module MNTZorro_v0_1_S00_AXI
     begin
       // Address decoding for reading registers
       case ( axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] )
-        2'h0   : reg_data_out <= out_reg0;
-        2'h1   : reg_data_out <= out_reg1;
-        2'h2   : reg_data_out <= out_reg2;
-        2'h3   : reg_data_out <= out_reg3;
+        3'h0   : reg_data_out <= out_reg0;
+        3'h1   : reg_data_out <= out_reg1;
+        3'h2   : reg_data_out <= out_reg2;
+        3'h3   : reg_data_out <= out_reg3;
         default : reg_data_out <= 'h0;
       endcase
     end

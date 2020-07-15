@@ -494,6 +494,8 @@ void pixelclock_init_2(struct zz_video_mode *mode) {
 #define MNTZORRO_REG1 4
 #define MNTZORRO_REG2 8
 #define MNTZORRO_REG3 12
+#define MNTZORRO_REG4 16
+#define MNTZORRO_REG5 20
 
 #define mntzorro_read(BaseAddress, RegOffset) \
     Xil_In32((BaseAddress) + (RegOffset))
@@ -1017,9 +1019,10 @@ int main() {
 	int interrupt_enabled = 0;
 
 	int request_video_align=0;
-	int old_vblank = 0;
-	XTime time1 = 0, time2 = 0;
+//	int old_vblank = 0;
+//	XTime time1 = 0, time2 = 0;
 	int vblank=0;
+	int frfb=0;
 
 	int custom_video_mode = ZZVMODE_CUSTOM;
 	int custom_vmode_param = VMODE_PARAM_HRES;
@@ -1724,7 +1727,8 @@ int main() {
 					break;
 				case REG_ZZ_ETH_RX:
 					//printf("RECV eth frame sz: %ld\n",zdata);
-					ethernet_receive_frame();
+					frfb=ethernet_receive_frame();
+					mntzorro_write(MNTZ_BASE_ADDR, MNTZORRO_REG4, frfb);
 					break;
 				case REG_ZZ_ETH_MAC_HI: {
 					uint8_t* mac = ethernet_get_mac_address_ptr();
@@ -1786,12 +1790,13 @@ int main() {
 				case REG_ZZ_USB_BUFSEL: {
 					//printf("[USB] select buffer: %d\n", zdata);
 					usb_selected_buffer_block = zdata;
+					mntzorro_write(MNTZ_BASE_ADDR, MNTZORRO_REG5, usb_selected_buffer_block);
 					break;
 				}
 				case REG_ZZ_DEBUG: {
 					//debug_lowlevel = zdata;
 					debug_dma_op[zdata] = !debug_dma_op[zdata];
-					printf("Debug for DMA RTG op %d %s.\n", zdata, (debug_dma_op[zdata]) ? "Enabled" : "Disabled");
+					printf("Debug for DMA RTG op %ld %s.\n", zdata, (debug_dma_op[zdata]) ? "Enabled" : "Disabled");
 					break;
 				}
 
