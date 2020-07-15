@@ -33,6 +33,8 @@
 #include <stdio.h>
 #include <string.h>
 
+void mdelay(int ms);
+
 static inline void *malloc_cache_aligned(size_t size)
 {
 	return memalign(ARCH_DMA_MINALIGN, ALIGN(size, ARCH_DMA_MINALIGN));
