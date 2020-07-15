@@ -30,16 +30,17 @@ uint32_t virt_to_phys(void* addr) {
 }
 
 // FIXME
-int tmr=0;
+unsigned long tmr=0;
 void udelay(int us) {
 	usleep(us);
 }
 void mdelay(int ms) {
 	usleep(1000*ms);
 }
-int get_timer(int i) {
+unsigned long get_timer(unsigned long i) {
 	mdelay(1);
-	return tmr++;
+	tmr++;
+	return (tmr-i);
 }
 
 #ifndef CONFIG_USB_MAX_CONTROLLER_COUNT
@@ -256,7 +257,7 @@ static int ehci_td_buffer(struct qTD *td, void *buf, size_t sz)
 	int idx;
 
 	if (addr != ALIGN(addr, ARCH_DMA_MINALIGN))
-		printf("EHCI-HCD: Misaligned buffer address (%p vs %x)\n", buf, ALIGN(addr, ARCH_DMA_MINALIGN));
+		printf("EHCI-HCD: Misaligned buffer address (%p vs %lx)\n", buf, ALIGN(addr, ARCH_DMA_MINALIGN));
 
 	flush_dcache_range(addr, ALIGN(addr + sz, ARCH_DMA_MINALIGN));
 
@@ -322,7 +323,7 @@ ehci_submit_async(struct usb_device *dev, unsigned long pipe, void *buffer,
 	uint32_t endpt, maxpacket, token, usbsts;
 	uint32_t c, toggle;
 	uint32_t cmd;
-	int timeout;
+	unsigned long timeout;
 	int ret = 0;
 	struct ehci_ctrl *ctrl = ehci_get_ctrl(dev);
 
