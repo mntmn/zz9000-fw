@@ -59,6 +59,7 @@ typedef u8 uint8_t;
 #define I2C_PAUSE 10
 
 #define Z3_SCRATCH_ADDR 0x33F0000
+#define ADDR_ADJ 0x1F0000
 
 // I2C controller instance
 XIicPs Iic;
@@ -195,8 +196,8 @@ void hdmi_ctrl_init() {
 }
 
 XAxiVdma vdma;
-static u32* framebuffer = 0;
-static u32 framebuffer_pan_offset = 0;
+u32* framebuffer = 0;
+u32 framebuffer_pan_offset = 0;
 static u32 blitter_dst_offset = 0;
 static u32 blitter_src_offset = 0;
 static u32 vmode_hsize = 800, vmode_vsize = 600, vmode_hdiv = 1, vmode_vdiv = 2;
@@ -610,6 +611,8 @@ void video_system_init_2(struct zz_video_mode *mode, int hdiv, int vdiv) {
 #define REVISION_MAJOR 1
 #define REVISION_MINOR 7
 
+int scalemode = 0;
+
 void video_mode_init(int mode, int scalemode, int colormode) {
 	int hdiv = 1, vdiv = 1;
 
@@ -643,21 +646,20 @@ void video_mode_init(int mode, int scalemode, int colormode) {
 	vmode_hdiv = hdiv;
 }
 
-int16_t sprite_x = 0, sprite_x_adj = 0;
-int16_t sprite_y = 0, sprite_y_adj = 0;
+int16_t sprite_x = 0, sprite_x_adj = 0, sprite_x_base = 0;
+int16_t sprite_y = 0, sprite_y_adj = 0, sprite_y_base = 0;
 uint16_t sprite_enabled = 0;
 uint32_t sprite_buf[32 * 48];
 uint8_t sprite_clipped = 0;
 int16_t sprite_clip_x = 0, sprite_clip_y = 0;
 
-int8_t sprite_x_offset = 0;
-int8_t sprite_y_offset = 0;
+int16_t sprite_x_offset = 0;
+int16_t sprite_y_offset = 0;
 
 uint8_t sprite_width  = 16;
 uint8_t sprite_height = 16;
 
 uint32_t sprite_colors[4] = { 0x00ff00ff, 0x00000000, 0x00000000, 0x00000000 };
-
 
 uint8_t sprite_template[16*16] = {
 		0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,
@@ -702,6 +704,38 @@ void sprite_reset() {
 			video_formatter_write((addr << 24) | data, MNTVF_OP_SPRITE_DATA);
 		}
 	}
+}
+
+void update_hw_sprite_pos(int16_t x, int16_t y) {
+	sprite_x = x + sprite_x_offset + 3;
+	// horizontally doubled mode
+	if (scalemode & 1) sprite_x *=2;
+	sprite_x_adj = sprite_x;
+
+	sprite_y = y + sprite_y_offset + 1;
+	// vertically doubled mode
+	if (scalemode & 2) sprite_y *= 2;
+	sprite_y_adj = sprite_y;
+
+	if (sprite_x < 0 || sprite_y < 0) {
+		if (sprite_clip_x != sprite_x || sprite_clip_y != sprite_y) {
+			clip_hw_sprite((sprite_x < 0) ? sprite_x : 0, (sprite_y < 0) ? sprite_y : 0);
+		}
+		sprite_clipped = 1;
+		if (sprite_x < 0) {
+			sprite_x_adj = 0;
+			sprite_clip_x = sprite_x;
+		}
+		if (sprite_y < 0) {
+			sprite_y_adj = 0;
+			sprite_clip_y = sprite_y;
+		}
+	}
+	else if (sprite_clipped && sprite_x >= 0 && sprite_y >= 0) {
+		clip_hw_sprite(0, 0);
+		sprite_clipped = 0;
+	}
+	video_formatter_write((sprite_y_adj << 16) | sprite_x_adj, MNTVF_OP_SPRITE_XY);
 }
 
 // this mode can be changed by amiga software to select a different resolution / framerate for
@@ -1010,7 +1044,6 @@ int main() {
 
 	int cache_counter = 0;
 	int videocap_enabled_old = 1;
-	int scalemode = 0;
 	int colormode = 0;
 	uint32_t framebuffer_pan_offset_old = framebuffer_pan_offset;
 	video_mode = 0x2200;
@@ -1215,6 +1248,7 @@ int main() {
 					sprite_height = rect_y2;
 
 					update_hw_sprite(bmp_data, sprite_colors, sprite_width, sprite_height);
+					update_hw_sprite_pos(sprite_x, sprite_y);
 					break;
 				}
 				case REG_ZZ_SPRITE_COLORS: {
@@ -1280,6 +1314,41 @@ int main() {
 
 				#define SWAP16(a) a = __builtin_bswap16(a);
 				#define SWAP32(a) a = __builtin_bswap32(a);
+
+				// Generic graphics acceleration
+				case REG_ZZ_ACC_OP: {
+					struct GFXData *data = (struct GFXData*)((u32)Z3_SCRATCH_ADDR);
+					switch (zdata) {
+						case ACC_OP_BUFFER_CLEAR: {
+							SWAP16(data->x[0]);
+							SWAP16(data->y[0]);
+
+							SWAP16(data->pitch[0]);
+							SWAP32(data->offset[0]);
+							data->offset[0] += ADDR_ADJ;
+
+							//printf("clearbuf: %.8X, %dx%d, %d size: %d\n", data->offset[0], data->x[0], data->y[0], data->pitch[0], sizeof(struct GFXData));
+							acc_clear_buffer(data->offset[0], data->x[0], data->y[0], data->pitch[0], data->rgb[0], data->u8_user[GFXDATA_U8_COLORMODE]);
+							break;
+						}
+						case ACC_OP_BUFFER_FLIP:
+							SWAP16(data->x[0]);
+							SWAP16(data->y[0]);
+
+							SWAP16(data->pitch[0]);
+							SWAP32(data->offset[0]);
+							SWAP32(data->offset[1]);
+							data->offset[0] += ADDR_ADJ;
+							data->offset[1] += ADDR_ADJ;
+
+							//printf("flipbuf: %.8X to %.8X %dx%d, %d\n", data->offset[0], data->offset[1], data->x[0], data->y[0], data->pitch[0]);
+							acc_flip_to_fb(data->offset[0], data->offset[1], data->x[0], data->y[0], data->pitch[0], data->u8_user[GFXDATA_U8_COLORMODE]);
+							break;
+						default:
+							break;
+					}
+					break;
+				}
 
 				// DMA RTG rendering
 				case REG_ZZ_BITTER_DMA_OP: {
@@ -1461,53 +1530,41 @@ int main() {
 							SWAP16(data->x[0]);
 							SWAP16(data->y[0]);
 
-							sprite_x = (int16_t)data->x[0] + sprite_x_offset + 3;
-							// horizontally doubled mode
-							if (scalemode & 1) sprite_x *=2;
-							sprite_x_adj = sprite_x;
+							sprite_x_base = (int16_t)data->x[0];
+							sprite_y_base = (int16_t)data->y[0];
 
-							sprite_y = (int16_t)data->y[0] + sprite_y_offset + 1;
-							// vertically doubled mode
-							if (scalemode & 2) sprite_y *= 2;
-							sprite_y_adj = sprite_y;
-
-							if (sprite_x < 0 || sprite_y < 0) {
-								if (sprite_clip_x != sprite_x || sprite_clip_y != sprite_y) {
-									clip_hw_sprite((sprite_x < 0) ? sprite_x : 0, (sprite_y < 0) ? sprite_y : 0);
-								}
-								sprite_clipped = 1;
-								if (sprite_x < 0) {
-									sprite_x_adj = 0;
-									sprite_clip_x = sprite_x;
-								}
-								if (sprite_y < 0) {
-									sprite_y_adj = 0;
-									sprite_clip_y = sprite_y;
-								}
-							}
-							else if (sprite_clipped && sprite_x >= 0 && sprite_y >= 0) {
-								clip_hw_sprite(0, 0);
-								sprite_clipped = 0;
-							}
-							video_formatter_write((sprite_y_adj << 16) | sprite_x_adj, MNTVF_OP_SPRITE_XY);
+							update_hw_sprite_pos((int16_t)data->x[0], (int16_t)data->y[0]);
 							break;
+						case OP_SPRITE_CLUT_BITMAP:
 						case OP_SPRITE_BITMAP: {
 							SWAP16(data->x[0]);		SWAP16(data->x[1]);
 							SWAP16(data->y[0]);		SWAP16(data->y[1]);
 
 							SWAP32(data->offset[1]);
 
-							uint8_t* bmp_data = (uint8_t*) ((u32) framebuffer
-									+ data->offset[1]);
+							uint8_t* bmp_data;
+							
+							if (zdata == OP_SPRITE_BITMAP)
+								bmp_data = (uint8_t*) ((u32) framebuffer + data->offset[1]);
+							else
+								bmp_data = (uint8_t*) ((u32) ADDR_ADJ + data->offset[1]);
 
 							clear_hw_sprite();
 							
-							sprite_x_offset = data->x[0];
-							sprite_y_offset = data->y[0];
+							sprite_x_offset = (int16_t)data->x[0];
+							sprite_y_offset = (int16_t)data->y[0];
 							sprite_width  = data->x[1];
 							sprite_height = data->y[1];
 
-							update_hw_sprite(bmp_data, sprite_colors, sprite_width, sprite_height);
+							if (zdata == OP_SPRITE_BITMAP) {
+								update_hw_sprite(bmp_data, sprite_colors, sprite_width, sprite_height);
+								update_hw_sprite_pos(sprite_x, sprite_y);
+							}
+							else {
+								//printf("Making a %dx%d cursor (%i %i)\n", sprite_width, sprite_height, sprite_x_offset, sprite_y_offset);
+								update_hw_sprite_clut(bmp_data, data->clut1, sprite_width, sprite_height, data->u8offset);
+								update_hw_sprite_pos(sprite_x_base, sprite_y_base);
+							}
 							break;
 						}
 						case OP_SPRITE_COLOR: {
