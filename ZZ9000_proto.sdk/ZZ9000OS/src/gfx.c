@@ -32,6 +32,18 @@ void set_fb(uint32_t* fb_, uint32_t pitch) {
 extern uint32_t* sprite_buf;
 void video_formatter_write(uint32_t data, uint16_t op);
 
+uint8_t color_map_16_to_8[65536];
+
+void *get_color_conversion_table(int index)
+{
+	switch (index) {
+		case 0:
+			return (void *)color_map_16_to_8;
+		default:
+			return 0;
+	}
+}
+
 void update_hw_sprite(uint8_t *data, uint32_t *colors, uint16_t w, uint16_t h)
 {
 	uint8_t cur_bit = 0x80;
@@ -1003,17 +1015,62 @@ void acc_flip_to_fb(uint32_t src, uint32_t dest, uint16_t w, uint16_t h, uint16_
 	//printf("Flipping %dx%d pixels, %d bytes (%d).\n", w, h, h * pitch, pitch);
 }
 
-void acc_blit_rect(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch)
+void acc_blit_rect(uint32_t src, uint32_t dest, uint16_t dx, uint16_t dy, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch, uint8_t draw_mode, uint8_t mask_color)
 {
 	if (!w || !h || !src || !dest)
 		return;
 
 	uint8_t* sp = (uint8_t*)((uint32_t)src);
 	uint8_t* dp = (uint8_t *)((uint32_t)dest);
-	dp += (x + (y * dest_pitch));
+	dp += (dx + (dy * dest_pitch));
+
+	switch (draw_mode) {
+		case 1: // Reverse direction
+			sp = (uint8_t*)((uint32_t)src) + (h-1) * src_pitch;
+			dp = (uint8_t*)((uint32_t)src) + (dy) * src_pitch;
+
+			for (int y = 0; y < 0; y++) {
+				memmove(dp, sp, w);
+				dp -= dest_pitch;
+				sp -= src_pitch;
+			}
+			return;
+			break;
+		case 2: // Masked blit
+			for (int y = 0; y < h; y++) {
+				for (int x = 0; x < w; x++) {
+					if (sp[x] != mask_color)
+						dp[x] = sp[x];
+				}
+				dp += dest_pitch;
+				sp += src_pitch;
+			}
+			return;
+			break;
+		default:
+			break;
+	}
 
 	for (int i = 0; i < h; i++) {
-		memcpy(dp, sp, src_pitch);
+		memcpy(dp, sp, w);
+		dp += dest_pitch;
+		sp += src_pitch;
+	}
+}
+
+void acc_blit_rect_16to8(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch)
+{
+	if (!w || !h || !src || !dest)
+		return;
+
+	uint16_t* sp = (uint16_t*)((uint32_t)src);
+	uint8_t* dp = (uint8_t *)((uint32_t)dest);
+	dp += (x + (y * dest_pitch));
+
+	for (int y = 0; y < h; y++) {
+		for (int x = 0; x < w; x++) {
+			dp[x] = color_map_16_to_8[SWAP16(sp[x])];
+		}
 		dp += dest_pitch;
 		sp += src_pitch;
 	}

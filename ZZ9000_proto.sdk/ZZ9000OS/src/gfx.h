@@ -52,7 +52,10 @@ void invert_rect(uint16_t rect_x1, uint16_t rect_y1, uint16_t w, uint16_t h, uin
 
 void acc_clear_buffer(uint32_t addr, uint16_t w, uint16_t h, uint16_t pitch_, uint32_t fg_color, uint32_t color_format);
 void acc_flip_to_fb(uint32_t src, uint32_t dest, uint16_t w, uint16_t h, uint16_t pitch_, uint32_t color_format);
-void acc_blit_rect(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch);
+void acc_blit_rect(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch, uint8_t draw_mode, uint8_t mask_color);
+void acc_blit_rect_16to8(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch);
+
+void *get_color_conversion_table(int index);
 
 /*#define MNTVA_COLOR_8BIT     0
 #define MNTVA_COLOR_16BIT565 1
@@ -68,6 +71,9 @@ enum color_formats {
 	MNTVA_COLOR_15BIT,
 	MNTVA_COLOR_NUM,
 };
+
+#define SWAP16(a) a = __builtin_bswap16(a)
+#define SWAP32(a) a = __builtin_bswap32(a)
 
 // see http://amigadev.elowar.com/read/ADCD_2.1/Libraries_Manual_guide/node0351.html
 #define JAM1	    0	      /* jam 1 color into raster */
@@ -538,6 +544,7 @@ enum gfx_acc_op {
   ACC_OP_BLIT_RECT,
   ACC_OP_ALLOC_SURFACE,
   ACC_OP_FREE_SURFACE,
+  ACC_OP_SET_BPP_CONVERSION_TABLE,
   ACC_OP_NUM,
 };
 

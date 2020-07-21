@@ -1315,13 +1315,10 @@ int main() {
 					rect_rgb2 |= (((zdata & 0xff) << 8) | zdata >> 8) << 16;
 					break;
 
-				#define SWAP16(a) a = __builtin_bswap16(a);
-				#define SWAP32(a) a = __builtin_bswap32(a);
-
 				// Generic graphics acceleration
 				case REG_ZZ_ACC_OP: {
 					struct GFXData *data = (struct GFXData*)((u32)Z3_SCRATCH_ADDR);
-					int8_t cf_bpp[MNTVA_COLOR_NUM] = { 1, 2, 4, -8, 2, };
+					int cf_bpp[MNTVA_COLOR_NUM] = { 1, 2, 4, -8, 2, };
 
 					switch (zdata) {
 						case ACC_OP_BUFFER_CLEAR: {
@@ -1360,16 +1357,35 @@ int main() {
 							data->offset[0] += ADDR_ADJ;
 							data->offset[1] += ADDR_ADJ;
 
-							acc_blit_rect(data->offset[0], data->offset[1], data->x[0], data->y[0], data->x[1], data->y[1], data->pitch[0], data->pitch[1]);
+							//printf("BLAB: %p\n", (void *)data->offset[0]);
+							if (data->u8_user[0] != data->u8_user[1]) {
+								if (data->u8_user[0] == 2 && data->u8_user[1] == 1) {
+									acc_blit_rect_16to8(data->offset[0], data->offset[1], data->x[0], data->y[0], data->x[1], data->y[1], data->pitch[0], data->pitch[1]);
+									break;
+								}
+								else
+									printf ("Unimplemented color conversion %d to %d\n", data->u8_user[0], data->u8_user[1]);
+							}
+							acc_blit_rect(data->offset[0], data->offset[1], data->x[0], data->y[0], data->x[1] * data->u8_user[0], data->y[1], data->pitch[0], data->pitch[1], data->u8_user[2], data->u8offset);
 							break;
 						case ACC_OP_ALLOC_SURFACE: {
 							SWAP16(data->x[0]); SWAP16(data->y[0]);
 							data->offset[0] = 0;
 
-							size_t sfc_size = ((data->x[0] * cf_bpp[data->u8_user[GFXDATA_U8_COLORMODE]]) * data->y[0]);
+							size_t sfc_size = 0;
 
-							printf ("Allocating %dx%d surface, %d bytes per pixel.\n", data->x[0], data->y[0], data->u8_user[GFXDATA_U8_COLORMODE]);
-							uint8_t *p = malloc(sfc_size);
+							if (data->u8_user[GFXDATA_U8_DRAWMODE] != 0)
+								sfc_size = ((data->x[0] * data->u8_user[GFXDATA_U8_DRAWMODE]) * data->y[0]);
+							else
+								sfc_size = ((data->x[0] * cf_bpp[data->u8_user[GFXDATA_U8_COLORMODE]]) * data->y[0]);
+
+							if (!sfc_size) {
+								printf("Refusing to allocate 0 bytes for you.\n");
+								break;
+							}
+
+							printf ("Allocating %dx%d surface, %d bytes per pixel, %d bytes.\n", data->x[0], data->y[0], cf_bpp[data->u8_user[GFXDATA_U8_COLORMODE]], sfc_size);
+							uint8_t *p = calloc(1, sfc_size);
 							printf ("Surface allocated at offset %p, or %p on the Amiga side.\n", p, p - ADDR_ADJ);
 							data->offset[0] = (uint32_t)(p - ADDR_ADJ);
 							SWAP32(data->offset[0]);
@@ -1382,6 +1398,17 @@ int main() {
 
 							free((void *)data->offset[0]);
 							data->offset[0] = 0;
+							break;
+						}
+						case ACC_OP_SET_BPP_CONVERSION_TABLE: {
+							// TODO:
+							// Add some thing to select table based on source and dest bpp.
+							// Requires the destination 8bpp palette to be in R3G2B3 format to look "correct" out of the box.
+							SWAP32(data->offset[0]);
+							data->offset[0] += ADDR_ADJ;
+
+							printf("Setting color conversion table...\n");
+							memcpy(get_color_conversion_table(0), (void*)data->offset[0], 65536);
 							break;
 						}
 						default:
