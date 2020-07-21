@@ -1002,3 +1002,19 @@ void acc_flip_to_fb(uint32_t src, uint32_t dest, uint16_t w, uint16_t h, uint16_
 	memcpy (dp, sp, h * pitch);
 	//printf("Flipping %dx%d pixels, %d bytes (%d).\n", w, h, h * pitch, pitch);
 }
+
+void acc_blit_rect(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch)
+{
+	if (!w || !h || !src || !dest)
+		return;
+
+	uint8_t* sp = (uint8_t*)((uint32_t)src);
+	uint8_t* dp = (uint8_t *)((uint32_t)dest);
+	dp += (x + (y * dest_pitch));
+
+	for (int i = 0; i < h; i++) {
+		memcpy(dp, sp, src_pitch);
+		dp += dest_pitch;
+		sp += src_pitch;
+	}
+}

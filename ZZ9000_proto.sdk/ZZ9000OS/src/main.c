@@ -1023,6 +1023,7 @@ int main() {
 	u32 zstate_raw;
 	int interlace_old = 0;
 	int videocap_ntsc_old = 0;
+	u32 *crab;
 
 	handle_amiga_reset();
 
@@ -1062,6 +1063,8 @@ int main() {
 	uint8_t debug_dma_op[OP_NUM];
 
 	memset(debug_dma_op, 0x00, OP_NUM);
+	crab = malloc(0x3410000);
+	crab[0x3400000] = 'a';
 
 	while (1) {
 		u32 zstate = mntzorro_read(MNTZ_BASE_ADDR, MNTZORRO_REG3);
@@ -1318,6 +1321,8 @@ int main() {
 				// Generic graphics acceleration
 				case REG_ZZ_ACC_OP: {
 					struct GFXData *data = (struct GFXData*)((u32)Z3_SCRATCH_ADDR);
+					int8_t cf_bpp[MNTVA_COLOR_NUM] = { 1, 2, 4, -8, 2, };
+
 					switch (zdata) {
 						case ACC_OP_BUFFER_CLEAR: {
 							SWAP16(data->x[0]);
@@ -1344,6 +1349,41 @@ int main() {
 							//printf("flipbuf: %.8X to %.8X %dx%d, %d\n", data->offset[0], data->offset[1], data->x[0], data->y[0], data->pitch[0]);
 							acc_flip_to_fb(data->offset[0], data->offset[1], data->x[0], data->y[0], data->pitch[0], data->u8_user[GFXDATA_U8_COLORMODE]);
 							break;
+						case ACC_OP_BLIT_RECT:
+							SWAP16(data->x[0]); SWAP16(data->y[0]);
+							SWAP16(data->x[1]); SWAP16(data->y[1]);
+
+							SWAP16(data->pitch[0]);
+							SWAP16(data->pitch[1]);
+							SWAP32(data->offset[0]);
+							SWAP32(data->offset[1]);
+							data->offset[0] += ADDR_ADJ;
+							data->offset[1] += ADDR_ADJ;
+
+							acc_blit_rect(data->offset[0], data->offset[1], data->x[0], data->y[0], data->x[1], data->y[1], data->pitch[0], data->pitch[1]);
+							break;
+						case ACC_OP_ALLOC_SURFACE: {
+							SWAP16(data->x[0]); SWAP16(data->y[0]);
+							data->offset[0] = 0;
+
+							size_t sfc_size = ((data->x[0] * cf_bpp[data->u8_user[GFXDATA_U8_COLORMODE]]) * data->y[0]);
+
+							printf ("Allocating %dx%d surface, %d bytes per pixel.\n", data->x[0], data->y[0], data->u8_user[GFXDATA_U8_COLORMODE]);
+							uint8_t *p = malloc(sfc_size);
+							printf ("Surface allocated at offset %p, or %p on the Amiga side.\n", p, p - ADDR_ADJ);
+							data->offset[0] = (uint32_t)(p - ADDR_ADJ);
+							SWAP32(data->offset[0]);
+							break;
+						}
+						case ACC_OP_FREE_SURFACE: {
+							SWAP32(data->offset[0]);
+							data->offset[0] += ADDR_ADJ;
+							printf("Freeing surface at %.8X... maybe.\n", data->offset[0]);
+
+							free((void *)data->offset[0]);
+							data->offset[0] = 0;
+							break;
+						}
 						default:
 							break;
 					}

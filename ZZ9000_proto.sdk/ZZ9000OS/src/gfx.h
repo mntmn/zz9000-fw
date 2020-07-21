@@ -52,12 +52,22 @@ void invert_rect(uint16_t rect_x1, uint16_t rect_y1, uint16_t w, uint16_t h, uin
 
 void acc_clear_buffer(uint32_t addr, uint16_t w, uint16_t h, uint16_t pitch_, uint32_t fg_color, uint32_t color_format);
 void acc_flip_to_fb(uint32_t src, uint32_t dest, uint16_t w, uint16_t h, uint16_t pitch_, uint32_t color_format);
+void acc_blit_rect(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch);
 
-#define MNTVA_COLOR_8BIT     0
+/*#define MNTVA_COLOR_8BIT     0
 #define MNTVA_COLOR_16BIT565 1
 #define MNTVA_COLOR_32BIT    2
 #define MNTVA_COLOR_1BIT     3
-#define MNTVA_COLOR_15BIT    4
+#define MNTVA_COLOR_15BIT    4*/
+
+enum color_formats {
+	MNTVA_COLOR_8BIT,
+	MNTVA_COLOR_16BIT565,
+	MNTVA_COLOR_32BIT,
+	MNTVA_COLOR_1BIT,
+	MNTVA_COLOR_15BIT,
+	MNTVA_COLOR_NUM,
+};
 
 // see http://amigadev.elowar.com/read/ADCD_2.1/Libraries_Manual_guide/node0351.html
 #define JAM1	    0	      /* jam 1 color into raster */
@@ -526,6 +536,8 @@ enum gfx_acc_op {
   ACC_OP_BUFFER_FLIP,
   ACC_OP_BUFFER_CLEAR,
   ACC_OP_BLIT_RECT,
+  ACC_OP_ALLOC_SURFACE,
+  ACC_OP_FREE_SURFACE,
   ACC_OP_NUM,
 };
 
