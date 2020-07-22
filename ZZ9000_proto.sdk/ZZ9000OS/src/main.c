@@ -70,6 +70,8 @@ int hdmi_ctrl_write_byte(u8 addr, u8 value) {
 	buffer[1] = value;
 	int status;
 
+	malloc(50);
+
 	while (XIicPs_BusIsBusy(&Iic)) {
 	};
 	usleep(I2C_PAUSE);
@@ -449,13 +451,13 @@ void pixelclock_init(int mhz) {
 	//XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR,  0x25C, 0x00000001);
 
 	phase = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x20C);
-	printf("CLK phase: %lu\n", phase);
+	//printf("CLK phase: %lu\n", phase);
 	duty = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x210);
-	printf("CLK duty: %lu\n", duty);
+	//printf("CLK duty: %lu\n", duty);
 	divide = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x208);
-	printf("CLK divide: %lu\n", divide);
+	//printf("CLK divide: %lu\n", divide);
 	muldiv = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200);
-	printf("CLK muldiv: %lu\n", muldiv);
+	//printf("CLK muldiv: %lu\n", muldiv);
 }
 
 void pixelclock_init_2(struct zz_video_mode *mode) {
@@ -479,13 +481,13 @@ void pixelclock_init_2(struct zz_video_mode *mode) {
 	//XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR,  0x25C, 0x00000001);
 
 	phase = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x20C);
-	printf("CLK phase: %lu\n", phase);
+	//printf("CLK phase: %lu\n", phase);
 	duty = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x210);
-	printf("CLK duty: %lu\n", duty);
+	//printf("CLK duty: %lu\n", duty);
 	divide = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x208);
-	printf("CLK divide: %lu\n", divide);
+	//printf("CLK divide: %lu\n", divide);
 	muldiv = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200);
-	printf("CLK muldiv: %lu\n", muldiv);
+	//printf("CLK muldiv: %lu\n", muldiv);
 }
 
 // FIXME!
@@ -564,19 +566,19 @@ void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
 	printf("VSI: %d x %d [%d x %d] %d MHz %d Hz, hdiv: %d vdiv: %d\n", hres,
 			vres, htotal, vtotal, mhz, vhz, hdiv, vdiv);
 
-	printf("pixelclock_init()...\n");
+	//printf("pixelclock_init()...\n");
 	pixelclock_init(mhz);
-	printf("...done.\n");
+	//printf("...done.\n");
 
-	printf("hdmi_set_video_mode()...\n");
+	//printf("hdmi_set_video_mode()...\n");
 	//hdmi_set_video_mode(hres, vres, mhz, vhz, hdmi);
 
-	printf("hdmi_ctrl_init()...\n");
+	//printf("hdmi_ctrl_init()...\n");
 	hdmi_ctrl_init();
 
-	printf("init_vdma()...\n");
+	//printf("init_vdma()...\n");
 	init_vdma(hres, vres, hdiv, vdiv);
-	printf("...done.\n");
+	//printf("...done.\n");
 
 	//dump_vdma_status(&vdma);
 }
@@ -586,19 +588,19 @@ void video_system_init_2(struct zz_video_mode *mode, int hdiv, int vdiv) {
 	printf("VSI: %d x %d [%d x %d] %d MHz %d Hz, hdiv: %d vdiv: %d\n", mode->hres,
 			mode->vres, mode->hmax, mode->vmax, mode->mhz, mode->vhz, hdiv, vdiv);
 
-	printf("pixelclock_init()...\n");
+	//printf("pixelclock_init()...\n");
 	pixelclock_init_2(mode);
-	printf("...done.\n");
+	//printf("...done.\n");
 
-	printf("hdmi_set_video_mode()...\n");
+	//printf("hdmi_set_video_mode()...\n");
 	//hdmi_set_video_mode(hres, vres, mhz, vhz, hdmi);
 
-	printf("hdmi_ctrl_init()...\n");
+	//printf("hdmi_ctrl_init()...\n");
 	hdmi_ctrl_init();
 
-	printf("init_vdma()...\n");
+	//printf("init_vdma()...\n");
 	init_vdma(mode->hres, mode->vres, hdiv, vdiv);
-	printf("...done.\n");
+	//printf("...done.\n");
 
 	//dump_vdma_status(&vdma);
 }
@@ -707,15 +709,19 @@ void sprite_reset() {
 }
 
 void update_hw_sprite_pos(int16_t x, int16_t y) {
-	sprite_x = x + sprite_x_offset + 3;
+	sprite_x = x + sprite_x_offset + 1;
 	// horizontally doubled mode
-	if (scalemode & 1) sprite_x *=2;
-	sprite_x_adj = sprite_x;
+	if (scalemode & 1)
+		sprite_x_adj = (sprite_x * 2) + 1;
+	else
+		sprite_x_adj = sprite_x + 2;
 
 	sprite_y = y + sprite_y_offset + 1;
 	// vertically doubled mode
-	if (scalemode & 2) sprite_y *= 2;
-	sprite_y_adj = sprite_y;
+	if (scalemode & 2)
+		sprite_y_adj = sprite_y *= 2;
+	else
+		sprite_y_adj = sprite_y;
 
 	if (sprite_x < 0 || sprite_y < 0) {
 		if (sprite_clip_x != sprite_x || sprite_clip_y != sprite_y) {
@@ -1329,7 +1335,6 @@ int main() {
 							SWAP32(data->offset[0]);
 							data->offset[0] += ADDR_ADJ;
 
-							//printf("clearbuf: %.8X, %dx%d, %d size: %d\n", data->offset[0], data->x[0], data->y[0], data->pitch[0], sizeof(struct GFXData));
 							acc_clear_buffer(data->offset[0], data->x[0], data->y[0], data->pitch[0], data->rgb[0], data->u8_user[GFXDATA_U8_COLORMODE]);
 							break;
 						}
@@ -1343,7 +1348,6 @@ int main() {
 							data->offset[0] += ADDR_ADJ;
 							data->offset[1] += ADDR_ADJ;
 
-							//printf("flipbuf: %.8X to %.8X %dx%d, %d\n", data->offset[0], data->offset[1], data->x[0], data->y[0], data->pitch[0]);
 							acc_flip_to_fb(data->offset[0], data->offset[1], data->x[0], data->y[0], data->pitch[0], data->u8_user[GFXDATA_U8_COLORMODE]);
 							break;
 						case ACC_OP_BLIT_RECT:
@@ -1384,7 +1388,7 @@ int main() {
 								break;
 							}
 
-							printf ("Allocating %dx%d surface, %d bytes per pixel, %d bytes.\n", data->x[0], data->y[0], cf_bpp[data->u8_user[GFXDATA_U8_COLORMODE]], sfc_size);
+							printf ("Allocating %dx%d surface, %d bytes per pixel, %d bytes.\n", data->x[0], data->y[0], data->u8_user[GFXDATA_U8_COLORMODE], sfc_size);
 							uint8_t *p = calloc(1, sfc_size);
 							printf ("Surface allocated at offset %p, or %p on the Amiga side.\n", p, p - ADDR_ADJ);
 							data->offset[0] = (uint32_t)(p - ADDR_ADJ);

@@ -53,6 +53,7 @@ localparam OP_UNUSED1=12;
 localparam OP_SPRITEXY=13;
 localparam OP_SPRITE_ADDR=14;
 localparam OP_SPRITE_DATA=15;
+localparam OP_VIDEOCAP=16; // we ignore this here, it's snooped by MNTZorro
 
 localparam CMODE_8BIT=0;
 localparam CMODE_16BIT=1;
@@ -112,9 +113,14 @@ reg [23:0] sprite_buffer[SPRITE_SIZE-1:0];
 reg [11:0] sprite_addr_in;
 reg [11:0] sprite_x;
 reg [11:0] sprite_y;
+reg sprite_dbl;
+reg vga_sprite_dbl; // vga_domain
 reg [11:0] vga_sprite_x; // vga domain
 reg [11:0] vga_sprite_y; // vga domain
+reg [11:0] vga_sprite_x2; // vga domain
+reg [11:0] vga_sprite_y2; // vga domain
 reg [11:0] sprite_px; // vga domain
+reg [11:0] sprite_py; // vga domain
 reg [23:0] sprite_pix; // vga domain
 reg sprite_on; // vga domain
 
@@ -216,6 +222,7 @@ begin
     OP_SCALE: begin
         scale_x  <= control_data_in[0];
         scale_y  <= control_data_in[1];
+        sprite_dbl <= control_data_in[1];
       end
     OP_COLORMODE: colormode  <= control_data_in[1:0]; // FIXME
     OP_VSYNC: vsync_request <= 1; //control_data[0];
@@ -313,6 +320,9 @@ always @(posedge dvi_clk) begin
     vga_sprite_x <= sprite_x;
     vga_sprite_y <= sprite_y;
   end
+  vga_sprite_x2 <= vga_sprite_x+(SPRITE_W<<sprite_dbl);
+  vga_sprite_y2 <= vga_sprite_y+(SPRITE_H<<sprite_dbl);
+  vga_sprite_dbl <= sprite_dbl;
   
   // FIXME there is some non-determinism in the relationship
   // between this process and the fetching process
@@ -395,11 +405,16 @@ always @(posedge dvi_clk) begin
     CMODE_32BIT: pixout <= pixout32_dly2;
   endcase
   
-  sprite_pix <= sprite_buffer[sprite_px];
-  if (counter_y >= vga_sprite_y && counter_y < (vga_sprite_y+SPRITE_H) 
-      && counter_x >= vga_sprite_x && counter_x < (vga_sprite_x+SPRITE_W)) begin
+  sprite_pix <= sprite_buffer[((sprite_py>>sprite_dbl)<<5)+(sprite_px>>sprite_dbl)];
+  if (counter_y >= vga_sprite_y && counter_y < vga_sprite_y2 
+      && counter_x >= vga_sprite_x && counter_x < vga_sprite_x2) begin
     sprite_on <= 1;
-    sprite_px <= sprite_px + 1;
+    if (sprite_px < (SPRITE_W<<sprite_dbl)-1'b1)
+      sprite_px <= sprite_px + 1'b1;
+    else begin
+      sprite_px <= 0;
+      sprite_py <= sprite_py + 1'b1;
+    end
   end else begin
     sprite_on <= 0;
   end
@@ -411,6 +426,7 @@ always @(posedge dvi_clk) begin
     if (counter_y > vga_v_max) begin
       counter_y <= 0;
       sprite_px <= 0;
+      sprite_py <= 0;
     end else begin
       counter_y <= counter_y + 1'b1;
     end

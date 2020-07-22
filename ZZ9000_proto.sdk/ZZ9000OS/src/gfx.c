@@ -944,25 +944,21 @@ void template_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y
 }
 
 // Generic graphics acceleration functionality
-void acc_clear_buffer(uint32_t addr, uint16_t w, uint16_t h, uint16_t pitch_, uint32_t fg_color, uint32_t color_format)
+void acc_clear_buffer(uint32_t addr, uint16_t w, uint16_t h, uint16_t pitch_, uint32_t fg_color, uint32_t color_format_)
 {
 	if (!w || !h || !addr)
 		return;
 
-	uint16_t pitch = pitch_;
+	uint16_t pitch = pitch_ * color_format_;
 	uint8_t* dp = (uint8_t*)((uint32_t)addr);
 	uint8_t u8_fg = fg_color >> 24;
 
-	if (pitch == 0) {
-		switch (color_format) {
-			case MNTVA_COLOR_8BIT: pitch = w; break;
-			case MNTVA_COLOR_16BIT565: pitch = w * 2; break;
-			case MNTVA_COLOR_32BIT: pitch = w * 4; break;
-			default: return; break;
-		}
+	uint8_t color_format = 0;
+	if (color_format_ == 2) {
+		color_format = MNTVA_COLOR_16BIT565;
+	} else if (color_format == 4) {
+		color_format = MNTVA_COLOR_32BIT;
 	}
-
-	//printf("Clearing %dx%d pixels, %d bytes (%d).\n", w, h, h * pitch, pitch);
 
 	switch(color_format) {
 		case MNTVA_COLOR_8BIT:
@@ -992,27 +988,11 @@ void acc_flip_to_fb(uint32_t src, uint32_t dest, uint16_t w, uint16_t h, uint16_
 	if (!w || !h || !src || !dest)
 		return;
 
-	uint16_t pitch = pitch_;
+	uint16_t pitch = pitch_ * color_format;
 	uint8_t* sp = (uint8_t*)((uint32_t)src);
 	uint8_t* dp = (uint8_t *)((uint32_t)dest);
-	//uint8_t* dp = (uint8_t*)((uint32_t)(framebuffer + framebuffer_pan_offset + 0x10000));
 
-	if (pitch == 0) {
-		switch (color_format) {
-			case MNTVA_COLOR_8BIT: pitch = w; break;
-			case MNTVA_COLOR_16BIT565: pitch = w * 2; break;
-			case MNTVA_COLOR_32BIT: pitch = w * 4; break;
-			default: return; break;
-		}
-	}
-
-	/*for (int i = 0; i < h; i++) {
-		memcpy(dp, sp, pitch);
-		sp += pitch;
-		dp += pitch;
-	}*/
 	memcpy (dp, sp, h * pitch);
-	//printf("Flipping %dx%d pixels, %d bytes (%d).\n", w, h, h * pitch, pitch);
 }
 
 void acc_blit_rect(uint32_t src, uint32_t dest, uint16_t dx, uint16_t dy, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch, uint8_t draw_mode, uint8_t mask_color)
