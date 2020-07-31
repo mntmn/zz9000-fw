@@ -64,6 +64,8 @@ typedef u8 uint8_t;
 // I2C controller instance
 XIicPs Iic;
 
+unsigned int cur_mem_offset = 0x3400000;
+
 int hdmi_ctrl_write_byte(u8 addr, u8 value) {
 	u8 buffer[2];
 	buffer[0] = addr;
@@ -810,6 +812,8 @@ void handle_amiga_reset() {
 	usb_read_write_num_blocks = 1;
 	ethernet_send_result = 0;
 
+	cur_mem_offset = 0x3500000;
+
 	// FIXME there should be more state to be reset
 }
 
@@ -1068,10 +1072,6 @@ int main() {
 	int custom_vmode_param = VMODE_PARAM_HRES;
 	uint8_t debug_dma_op[OP_NUM];
 
-	memset(debug_dma_op, 0x00, OP_NUM);
-	crab = malloc(0x3410000);
-	crab[0x3400000] = 'a';
-
 	while (1) {
 		u32 zstate = mntzorro_read(MNTZ_BASE_ADDR, MNTZORRO_REG3);
 		zstate_raw = zstate;
@@ -1324,9 +1324,17 @@ int main() {
 				// Generic graphics acceleration
 				case REG_ZZ_ACC_OP: {
 					struct GFXData *data = (struct GFXData*)((u32)Z3_SCRATCH_ADDR);
-					int cf_bpp[MNTVA_COLOR_NUM] = { 1, 2, 4, -8, 2, };
+					//int cf_bpp[MNTVA_COLOR_NUM] = { 1, 2, 4, -8, 2, };
 
 					switch (zdata) {
+						// SURFACE BLIT OPS
+						case ACC_OP_NONE: {
+							SWAP32(data->offset[0]);
+							SWAP32(data->offset[1]);
+
+							printf ("%s: %p - %p\n", data->clut2, (uint8_t*)data->offset[0], (uint8_t*)data->offset[1]);
+							break;
+						}
 						case ACC_OP_BUFFER_CLEAR: {
 							SWAP16(data->x[0]);
 							SWAP16(data->y[0]);
@@ -1372,42 +1380,100 @@ int main() {
 							}
 							acc_blit_rect(data->offset[0], data->offset[1], data->x[0], data->y[0], data->x[1] * data->u8_user[0], data->y[1], data->pitch[0], data->pitch[1], data->u8_user[2], data->u8offset);
 							break;
-						case ACC_OP_ALLOC_SURFACE: {
+						// PRIMITIVE OPS
+						case ACC_OP_DRAW_CIRCLE:
 							SWAP16(data->x[0]); SWAP16(data->y[0]);
+							SWAP16(data->x[1]); SWAP16(data->y[1]);
+							SWAP16(data->x[2]); SWAP16(data->y[2]);
+							
+							SWAP32(data->offset[0]);
+							SWAP16(data->pitch[0]);
+							data->offset[0] += ADDR_ADJ;
+
+							acc_draw_circle(data->offset[0], data->pitch[0], data->x[0], data->y[0], data->x[2], data->x[1], data->y[1], data->rgb[0], data->u8_user[0]);
+							break;
+						case ACC_OP_DRAW_LINE:
+							SWAP16(data->x[0]); SWAP16(data->y[0]);
+							SWAP16(data->x[1]); SWAP16(data->y[1]);
+
+							SWAP32(data->offset[0]);
+							SWAP16(data->pitch[0]);
+							data->offset[0] += ADDR_ADJ;
+
+							//printf("Drawing line from %d,%d to %d,%d...\n", data->x[0], data->y[0], data->x[1], data->y[1]);
+							acc_draw_line(data->offset[0], data->pitch[0], data->x[0], data->y[0], data->x[1], data->y[1], data->rgb[0], data->u8_user[0], data->u8_user[1], data->u8_user[2]);
+							break;
+						case ACC_OP_FILL_RECT:
+							SWAP16(data->x[0]); SWAP16(data->y[0]);
+							SWAP16(data->x[1]); SWAP16(data->y[1]);
+
+							SWAP32(data->offset[0]);
+							SWAP16(data->pitch[0]);
+							data->offset[0] += ADDR_ADJ;
+
+							//printf("Filling rect at %d,%d to %d,%d...\n", data->x[0], data->y[0], data->x[0] + data->x[1], data->y[0] + data->y[1]);
+							acc_fill_rect(data->offset[0], data->pitch[0], data->x[0], data->y[0], data->x[1], data->y[1], data->rgb[0], data->u8_user[0]);
+							break;
+						// ALLOC/DATA OPS
+						case ACC_OP_ALLOC_SURFACE: {
+							unsigned int sfc_size = 0;
 							data->offset[0] = 0;
+							if (data->u8_user[1] == 1) {
+								SWAP32(data->offset[1]);
+								sfc_size = data->offset[1];
+							}
+							else {
+								SWAP16(data->x[0]); SWAP16(data->y[0]);
+								data->offset[0] = 0;
+								sfc_size = ((data->x[0] * data->u8_user[0]) * data->y[0]);
 
-							size_t sfc_size = 0;
+							}
 
-							if (data->u8_user[GFXDATA_U8_DRAWMODE] != 0)
-								sfc_size = ((data->x[0] * data->u8_user[GFXDATA_U8_DRAWMODE]) * data->y[0]);
-							else
-								sfc_size = ((data->x[0] * cf_bpp[data->u8_user[GFXDATA_U8_COLORMODE]]) * data->y[0]);
+							unsigned int barf = sfc_size % 256;
+							if (barf)
+								sfc_size += (256 - barf);
 
+							if (data->u8_user[1] == 1) {
+								printf ("Alloc requested for %d bytes.\n", data->offset[1]);
+							}
+							else {
+								printf ("Alloc requested for %dx%d surface, %.2X bytes per pixel, %d bytes.\n", data->x[0], data->y[0], data->u8_user[0], sfc_size);
+							}
 							if (!sfc_size) {
 								printf("Refusing to allocate 0 bytes for you.\n");
 								break;
 							}
 
-							printf ("Allocating %dx%d surface, %d bytes per pixel, %d bytes.\n", data->x[0], data->y[0], data->u8_user[GFXDATA_U8_COLORMODE], sfc_size);
-							uint8_t *p = calloc(1, sfc_size);
-							printf ("Surface allocated at offset %p, or %p on the Amiga side.\n", p, p - ADDR_ADJ);
-							data->offset[0] = (uint32_t)(p - ADDR_ADJ);
+							//uint8_t *p = malloc(sfc_size);
+							//memset(p, 0x00, sfc_size);
+							//allocated_surfaces++;
+							//printf ("Surface allocated at offset %.8X, or %.8X on the Amiga side.\n", cur_mem_offset, cur_mem_offset - ADDR_ADJ);
+
+							data->offset[0] = cur_mem_offset - ADDR_ADJ;
+							memset((void *)cur_mem_offset, 0x00, sfc_size);
+							cur_mem_offset += sfc_size;
 							SWAP32(data->offset[0]);
 							break;
 						}
 						case ACC_OP_FREE_SURFACE: {
 							SWAP32(data->offset[0]);
 							data->offset[0] += ADDR_ADJ;
-							printf("Freeing surface at %.8X... maybe.\n", data->offset[0]);
-
-							free((void *)data->offset[0]);
+							void *ape = (void*)data->offset[0];
+							if (data->u8_user[0]) {
+								printf("[%s] Freeing surface at %p... Not really.\n", data->clut2, ape);
+							}
+							//else
+								//printf("Freeing surface at %p... Not really.\n", ape);
 							data->offset[0] = 0;
+
+							//free(ape);
+							//printf(" freed!\n");
 							break;
 						}
 						case ACC_OP_SET_BPP_CONVERSION_TABLE: {
 							// TODO:
 							// Add some thing to select table based on source and dest bpp.
-							// Requires the destination 8bpp palette to be in R3G2B3 format to look "correct" out of the box.
+							// Requires the destination 8bpp palette to be in R3G3B2 format to look "correct" out of the box.
 							SWAP32(data->offset[0]);
 							data->offset[0] += ADDR_ADJ;
 

@@ -55,6 +55,10 @@ void acc_flip_to_fb(uint32_t src, uint32_t dest, uint16_t w, uint16_t h, uint16_
 void acc_blit_rect(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch, uint8_t draw_mode, uint8_t mask_color);
 void acc_blit_rect_16to8(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch);
 
+void acc_draw_line(uint32_t dest, uint16_t pitch, int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint32_t color, uint8_t bpp, uint8_t pen_width, uint8_t pen_height);
+void acc_fill_rect(uint32_t dest, uint16_t pitch, int16_t x, int16_t y, int16_t w, int16_t h, uint32_t fg_color, uint8_t bpp);
+void acc_draw_circle(uint32_t dest, uint16_t pitch, int16_t x, int16_t y, int16_t r, int16_t w, int16_t h, uint32_t fg_color, uint8_t bpp);
+
 void *get_color_conversion_table(int index);
 
 /*#define MNTVA_COLOR_8BIT     0
@@ -512,6 +516,7 @@ struct GFXData {
   uint16_t pitch[4];
   uint8_t u8_user[8];
   uint8_t op, mask, minterm, u8offset;
+  uint32_t u32_user[8];
   uint8_t clut1[768];
   uint8_t clut2[768];
   uint8_t clut3[768];
@@ -545,6 +550,9 @@ enum gfx_acc_op {
   ACC_OP_ALLOC_SURFACE,
   ACC_OP_FREE_SURFACE,
   ACC_OP_SET_BPP_CONVERSION_TABLE,
+  ACC_OP_DRAW_LINE,
+  ACC_OP_FILL_RECT,
+  ACC_OP_DRAW_CIRCLE,
   ACC_OP_NUM,
 };
 

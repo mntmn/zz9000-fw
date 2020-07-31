@@ -943,6 +943,13 @@ void template_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y
 	}
 }
 
+#define MNTVA_FROM_BPP(d, s) \
+	if (s == 2) { \
+		d = MNTVA_COLOR_16BIT565; \
+	} else if (s == 4) { \
+		d = MNTVA_COLOR_32BIT; \
+	}
+
 // Generic graphics acceleration functionality
 void acc_clear_buffer(uint32_t addr, uint16_t w, uint16_t h, uint16_t pitch_, uint32_t fg_color, uint32_t color_format_)
 {
@@ -953,12 +960,8 @@ void acc_clear_buffer(uint32_t addr, uint16_t w, uint16_t h, uint16_t pitch_, ui
 	uint8_t* dp = (uint8_t*)((uint32_t)addr);
 	uint8_t u8_fg = fg_color >> 24;
 
-	uint8_t color_format = 0;
-	if (color_format_ == 2) {
-		color_format = MNTVA_COLOR_16BIT565;
-	} else if (color_format == 4) {
-		color_format = MNTVA_COLOR_32BIT;
-	}
+	uint8_t color_format = MNTVA_COLOR_8BIT;
+	MNTVA_FROM_BPP(color_format, color_format_)
 
 	switch(color_format) {
 		case MNTVA_COLOR_8BIT:
@@ -979,8 +982,6 @@ void acc_clear_buffer(uint32_t addr, uint16_t w, uint16_t h, uint16_t pitch_, ui
 			break;
 	}
 }
-
-extern uint32_t framebuffer, framebuffer_pan_offset;
 
 void acc_flip_to_fb(uint32_t src, uint32_t dest, uint16_t w, uint16_t h, uint16_t pitch_, uint32_t color_format)
 {
@@ -1054,4 +1055,161 @@ void acc_blit_rect_16to8(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, ui
 		dp += dest_pitch;
 		sp += src_pitch;
 	}
+}
+
+#define ACC_DRAW_LINE_PIXELS \
+	for (int y = 0; y < pen_width; y++) { \
+		for (int x2 = 0; x2 < pen_width; x2++) { \
+			switch(color_format) { \
+				case MNTVA_COLOR_8BIT: \
+					dp[x + x2 + (y * pitch)] = u8_fg; break; \
+				case MNTVA_COLOR_16BIT565: \
+					((uint16_t *)dp)[x + x2 + (y * pitch)] = fg_color; break; \
+				case MNTVA_COLOR_32BIT: \
+					((uint32_t *)dp)[x + x2 + (y * pitch)] = fg_color; break; \
+			} \
+		} \
+	}
+
+void acc_draw_line(uint32_t dest, uint16_t pitch, int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint32_t fg_color, uint8_t bpp, uint8_t pen_width, uint8_t pen_height)
+{
+	uint8_t color_format = MNTVA_COLOR_8BIT;
+	MNTVA_FROM_BPP(color_format, bpp)
+	uint8_t u8_fg = fg_color >> 24;
+
+	uint8_t* dp = (uint8_t *)((uint32_t)dest + (y1 * pitch));
+	int32_t line_step = pitch;
+	int8_t x_reverse = 0;
+
+	int16_t dx, dy, dx_abs, dy_abs, ix, iy, x = x1, len;
+
+	if (x2 < x1)
+		x_reverse = 1;
+	if (y2 < y1)
+		line_step = -pitch;
+
+	dx = x2 - x1;
+	dy = y2 - y1;
+	dx_abs = abs(dx);
+	dy_abs = abs(dy);
+	ix = dy_abs >> 1;
+	iy = dx_abs >> 1;
+
+	ACC_DRAW_LINE_PIXELS;
+
+	if (dx_abs >= dy_abs) {
+		len = dx_abs;
+		for (uint16_t i = 0; i < len; i++) {
+			iy += dy_abs;
+			if (iy >= dx_abs) {
+				iy -= dx_abs;
+				dp += line_step;
+			}
+			x += (x_reverse) ? -1 : 1;
+
+			ACC_DRAW_LINE_PIXELS;
+		}
+	}
+	else {
+		len = dy_abs;
+		for (uint16_t i = 0; i < len; i++) {
+			ix += dx_abs;
+			if (ix >= dy_abs) {
+				ix -= dy_abs;
+				x += (x_reverse) ? -1 : 1;
+			}
+			dp += line_step;
+
+			ACC_DRAW_LINE_PIXELS;
+		}
+	}
+}
+
+void acc_fill_rect(uint32_t dest, uint16_t pitch, int16_t x, int16_t y, int16_t w, int16_t h, uint32_t fg_color, uint8_t bpp)
+{
+	uint8_t color_format = MNTVA_COLOR_8BIT;
+	MNTVA_FROM_BPP(color_format, bpp)
+	uint8_t u8_fg = fg_color >> 24;
+
+	uint8_t* dp = (uint8_t *)((uint32_t)dest + (x * bpp) + (y * pitch));
+	for (int i = 0; i < h; i++) {
+		for (int j = 0; j < w; j++) {
+			switch(color_format) {
+				case MNTVA_COLOR_8BIT:
+					memset(dp, u8_fg, w);
+					j = w;
+					break;
+				case MNTVA_COLOR_16BIT565:
+					((uint16_t *)dp)[x] = fg_color;
+					break;
+				case MNTVA_COLOR_32BIT:
+					((uint32_t *)dp)[x] = fg_color;
+					break;
+				default:
+					break;
+			}
+		}
+		dp += pitch;
+	}
+}
+
+#define CHKBLOT(a, b) \
+	if (a >= 0 && b >= 0 && a < w && b < h)
+
+//	DrawPixel(surface, x + x1, y + y1, colour);
+//	DrawPixel(surface, x - x1, y + y1, colour);
+//	DrawPixel(surface, x + x1, y - y1, colour);
+//	DrawPixel(surface, x - x1, y - y1, colour);
+//	DrawPixel(surface, x + y1, y + x1, colour);
+//	DrawPixel(surface, x - y1, y + x1, colour);
+//	DrawPixel(surface, x + y1, y - x1, colour);
+//	DrawPixel(surface, x - y1, y - x1, colour);
+
+#define BLOTCIRCLE(a, b) \
+	CHKBLOT((x + x1),(y + y1)) a[(x + x1) + ((y + y1) * pitch)] = b; \
+	CHKBLOT((x - x1),(y + y1)) a[(x - x1) + ((y + y1) * pitch)] = b; \
+	CHKBLOT((x + x1),(y - y1)) a[(x + x1) + ((y - y1) * pitch)] = b; \
+	CHKBLOT((x - x1),(y - y1)) a[(x - x1) + ((y - y1) * pitch)] = b; \
+	CHKBLOT((x + y1),(y + x1)) a[(x + y1) + ((y + x1) * pitch)] = b; \
+	CHKBLOT((x - y1),(y + x1)) a[(x - y1) + ((y + x1) * pitch)] = b; \
+	CHKBLOT((x + y1),(y - x1)) a[(x + y1) + ((y - x1) * pitch)] = b; \
+	CHKBLOT((x - y1),(y - x1)) a[(x - y1) + ((y - x1) * pitch)] = b;
+
+void acc_draw_circle(uint32_t dest, uint16_t pitch, int16_t x, int16_t y, int16_t r, int16_t w, int16_t h, uint32_t fg_color, uint8_t bpp)
+{
+	uint8_t color_format = MNTVA_COLOR_8BIT;
+	MNTVA_FROM_BPP(color_format, bpp)
+	uint8_t u8_fg = fg_color >> 24;
+
+    int x1 = r;
+    int y1 = 0;
+    int d = 3 - 2 * r;
+	
+	uint8_t* dp = (uint8_t *)(uint32_t)dest;
+
+    while (x1 >= y1) {
+        y1++;
+
+        if (d > 0) {
+            x1--;
+            d = d + 4 * (y1 - x1) + 10;
+        }
+		else {
+            d = d + 4 * y1 + 6;
+        }
+
+		switch(color_format) {
+			case MNTVA_COLOR_8BIT:
+				BLOTCIRCLE(dp, u8_fg);
+				break;
+			case MNTVA_COLOR_16BIT565:
+				BLOTCIRCLE(((uint16_t *)dp), fg_color);
+				break;
+			case MNTVA_COLOR_32BIT:
+				BLOTCIRCLE(((uint32_t *)dp), fg_color);
+				break;
+			default:
+				break;
+		}
+    }
 }
