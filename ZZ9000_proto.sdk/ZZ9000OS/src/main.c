@@ -1722,13 +1722,12 @@ int main() {
 
 							if (zdata == OP_SPRITE_BITMAP) {
 								update_hw_sprite(bmp_data, sprite_colors, sprite_width, sprite_height);
-								update_hw_sprite_pos(sprite_x, sprite_y);
 							}
 							else {
 								//printf("Making a %dx%d cursor (%i %i)\n", sprite_width, sprite_height, sprite_x_offset, sprite_y_offset);
 								update_hw_sprite_clut(bmp_data, data->clut1, sprite_width, sprite_height, data->u8offset);
-								update_hw_sprite_pos(sprite_x_base, sprite_y_base);
 							}
+							update_hw_sprite_pos(sprite_x_base, sprite_y_base);
 							break;
 						}
 						case OP_SPRITE_COLOR: {
