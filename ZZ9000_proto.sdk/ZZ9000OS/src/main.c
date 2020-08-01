@@ -1332,7 +1332,7 @@ int main() {
 							SWAP32(data->offset[0]);
 							SWAP32(data->offset[1]);
 
-							printf ("%s: %p - %p\n", data->clut2, (uint8_t*)data->offset[0], (uint8_t*)data->offset[1]);
+							printf ("%s: %d - %d\n", data->clut2, data->offset[0], data->offset[1]);
 							break;
 						}
 						case ACC_OP_BUFFER_CLEAR: {
@@ -1382,6 +1382,7 @@ int main() {
 							break;
 						// PRIMITIVE OPS
 						case ACC_OP_DRAW_CIRCLE:
+						case ACC_OP_FILL_CIRCLE:
 							SWAP16(data->x[0]); SWAP16(data->y[0]);
 							SWAP16(data->x[1]); SWAP16(data->y[1]);
 							SWAP16(data->x[2]); SWAP16(data->y[2]);
@@ -1390,7 +1391,10 @@ int main() {
 							SWAP16(data->pitch[0]);
 							data->offset[0] += ADDR_ADJ;
 
-							acc_draw_circle(data->offset[0], data->pitch[0], data->x[0], data->y[0], data->x[2], data->x[1], data->y[1], data->rgb[0], data->u8_user[0]);
+							if (zdata == ACC_OP_DRAW_CIRCLE)
+								acc_draw_circle(data->offset[0], data->pitch[0], data->x[0], data->y[0], data->x[2], data->x[1], data->y[1], data->rgb[0], data->u8_user[0]);
+							else
+								acc_fill_circle(data->offset[0], data->pitch[0], data->x[0], data->y[0], data->x[2], data->x[1], data->y[1], data->rgb[0], data->u8_user[0]);
 							break;
 						case ACC_OP_DRAW_LINE:
 							SWAP16(data->x[0]); SWAP16(data->y[0]);
@@ -1414,6 +1418,27 @@ int main() {
 							//printf("Filling rect at %d,%d to %d,%d...\n", data->x[0], data->y[0], data->x[0] + data->x[1], data->y[0] + data->y[1]);
 							acc_fill_rect(data->offset[0], data->pitch[0], data->x[0], data->y[0], data->x[1], data->y[1], data->rgb[0], data->u8_user[0]);
 							break;
+						case ACC_OP_DRAW_FLAT_TRI: {
+							TriangleDef tridef;
+							memset(&tridef, 0x00, sizeof(TriangleDef));
+							uint32_t *pts_ptr = (uint32_t *)data->clut4;
+
+							SWAP16(data->x[0]); SWAP16(data->y[0]);
+
+							SWAP32(data->offset[0]);
+							SWAP16(data->pitch[0]);
+							data->offset[0] += ADDR_ADJ;
+
+							tridef.a[0] = SWAP32(pts_ptr[0]);
+							tridef.a[1] = SWAP32(pts_ptr[1]);
+							tridef.b[0] = SWAP32(pts_ptr[2]);
+							tridef.b[1] = SWAP32(pts_ptr[3]);
+							tridef.c[0] = SWAP32(pts_ptr[4]);
+							tridef.c[1] = SWAP32(pts_ptr[5]);
+
+							acc_fill_flat_tri(data->offset[0], &tridef, data->x[0], data->y[0], data->rgb[0], data->u8_user[0]);
+							break;
+						}
 						// ALLOC/DATA OPS
 						case ACC_OP_ALLOC_SURFACE: {
 							unsigned int sfc_size = 0;

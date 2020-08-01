@@ -1181,22 +1181,22 @@ void acc_draw_circle(uint32_t dest, uint16_t pitch, int16_t x, int16_t y, int16_
 	MNTVA_FROM_BPP(color_format, bpp)
 	uint8_t u8_fg = fg_color >> 24;
 
-    int x1 = r;
-    int y1 = 0;
-    int d = 3 - 2 * r;
+	int x1 = r;
+	int y1 = 0;
+	int d = 3 - 2 * r;
 	
 	uint8_t* dp = (uint8_t *)(uint32_t)dest;
 
-    while (x1 >= y1) {
-        y1++;
+	while (x1 >= y1) {
+		y1++;
 
-        if (d > 0) {
-            x1--;
-            d = d + 4 * (y1 - x1) + 10;
-        }
+		if (d > 0) {
+			x1--;
+			d = d + 4 * (y1 - x1) + 10;
+		}
 		else {
-            d = d + 4 * y1 + 6;
-        }
+			d = d + 4 * y1 + 6;
+		}
 
 		switch(color_format) {
 			case MNTVA_COLOR_8BIT:
@@ -1211,5 +1211,307 @@ void acc_draw_circle(uint32_t dest, uint16_t pitch, int16_t x, int16_t y, int16_
 			default:
 				break;
 		}
-    }
+	}
 }
+
+void acc_fill_circle(uint32_t dest, uint16_t pitch, int16_t x0, int16_t y0, int16_t r, int16_t w, int16_t h, uint32_t fg_color, uint8_t bpp)
+{
+	uint8_t color_format = MNTVA_COLOR_8BIT;
+	MNTVA_FROM_BPP(color_format, bpp)
+	uint8_t u8_fg = fg_color >> 24;
+
+	uint8_t* dp = (uint8_t *)(uint32_t)dest;
+	float radius_sqr = r * r;
+
+	for (int x = -r; x < r ; x++)
+	{
+		int hh = (int)sqrt(radius_sqr - x * x);
+		int rx = x0 + x;
+		int ph = y0 + hh;
+
+		for (int y = y0 - hh; y < ph; y++) {
+			switch(color_format) {
+				case MNTVA_COLOR_8BIT:
+					CHKBLOT(rx, y)
+						dp[rx + (y * pitch)] = u8_fg;
+					break;
+				case MNTVA_COLOR_16BIT565:
+					CHKBLOT(rx, y)
+						((uint16_t *)dp)[rx + (y * pitch)] = fg_color;
+					break;
+				case MNTVA_COLOR_32BIT:
+					CHKBLOT(rx, y)
+						((uint32_t *)dp)[rx + (y * pitch)] = fg_color;
+					break;
+				default:
+					break;
+			}
+		}
+	}
+}
+
+uint8_t *tri_array = 0;
+
+void TriTexLine(int32_t x1, int32_t x2, int32_t y, int32_t tx1, int32_t tx2, int32_t ty1, int32_t ty2, uint16_t w, uint16_t h, uint32_t fg_color)
+{
+	// Round to ensure that problems caused by rounding errors don't occur (jumping lines)
+	x2 &= 0xFFFF0000;
+	x1 &= 0xFFFF0000;
+	uint8_t u8_fg = fg_color >> 24;
+
+	// Sort values to make drawing from left to right possible
+	if (x2 < x1) {
+		int32_t temp = x2;
+		x2 = x1;
+		x1 = temp;
+		temp = tx2;
+		tx2 = tx1;
+		tx1 = temp;
+		temp = ty2;
+		ty2 = ty1;
+		ty1 = temp;
+	}
+
+	int32_t xdelta = (x2 - x1) >>16;
+	if (xdelta <1)
+		return;
+
+	int xd = xdelta;
+
+	//Calculate start Tex-X and Tex-X-Increment
+	int txi = tx1; //fixed point
+	int32_t txd = (tx2 - tx1) / xdelta;
+	int txdi = txd; //same here
+
+	//Same for Tex-Y and Tex-Y-Increment
+	int tyi = ty1; //fixed point
+	int32_t tyd = (ty2 - ty1) / xdelta;
+	int tydi = tyd; //same here
+
+
+	//Clipping begin
+	//If line isn't inside screen -> outta here
+	x1 >>= 16;
+	x2 >>= 16;
+
+	if (x1 > ((w - 1)) || (x2 < 0))
+		return;
+
+	/*If the line is clipped at the left screen border (where we start), the left out
+	gouraud and texture steps have to be calculated; x is set to 0 */
+	if (x1 < 0) {
+		//int xm=-x1;
+		x1 = 0;
+	}
+	/* x is simply clipped at the right border. That's where the loop is going to end
+	then */
+	if (x2 > (w - 1))
+		x2= (w - 1);
+	//End of clipping and calculation of screen start address
+		int arrayptr = (y * w) + (x1);
+
+	//Recalculate X-Delta because of clipping
+	xdelta = (x2 - x1);
+	if (xdelta <= 0)
+		return;
+	xd = (int)(xdelta);
+
+	for (int x = 0; x <= xd; x++) {
+		//Fetch a pixel from the texture (256*256)
+		*(tri_array + (arrayptr++)) = u8_fg;
+		//*(tri_array + (arrayptr++)) = array_tex1[(txi >> 16) + ((tyi >> 8) & 0xff00)];
+		
+		//Increase Texture- and Gouraud-counter
+		txi += txdi;
+		tyi += tydi;
+	}
+}
+
+// filled tri code viciously stolen from mntmn...!
+void acc_fill_flat_tri(uint32_t dest, TriangleDef *d, uint16_t w, uint16_t h, uint32_t fg_color, uint8_t bpp)
+{
+	uint8_t u8_fg = fg_color >> 24;
+	int32_t *dataa, *datab, *datac;
+
+	int32_t xs1, xs2, xs3, txs1, txs2, txs3, tys1, tys2, tys3;
+	int32_t *tempdata;
+
+	dataa = d->a;
+	datab = d->b;
+	datac = d->c;
+
+	tri_array = (uint8_t *)dest;
+
+	// Very simple sorting of the three y coordinates
+	if (dataa[1] > datab[1]) {
+		tempdata = dataa;
+		dataa = datab;
+		datab = tempdata;
+	}
+	if (datab[1] > datac[1]) {
+		tempdata = datab;
+		datab = datac;
+		datac = tempdata;
+	}
+	if (dataa[1] > datab[1]) {
+		tempdata = dataa;
+		dataa = datab;
+		datab = tempdata;
+	}
+
+	// Calculate some deltas 
+	int32_t xd1 = datab[0] - dataa[0];
+	int32_t xd2 = datac[0] - dataa[0];
+	int32_t xd3 = datac[0] - datab[0];
+	int32_t yd1 = datab[1] - dataa[1];
+	int32_t yd2 = datac[1] - dataa[1];
+	int32_t yd3 = datac[1] - datab[1];
+	int32_t txd1 = datab[2] - dataa[2];
+	int32_t txd2 = datac[2] - dataa[2];
+	int32_t txd3 = datac[2] - datab[2];
+	int32_t tyd1 = datab[3] - dataa[3];
+	int32_t tyd2 = datac[3] - dataa[3];
+	int32_t tyd3 = datac[3] - datab[3];
+
+	// Calculate steps per line while taking care of division by 0
+	if(yd1 != 0) {
+		xs1 = xd1 / yd1;
+		txs1 = txd1 / yd1;
+		tys1 = tyd1 / yd1;
+	}
+	else {
+		xs1 = xd1;
+		txs1 = txd1;
+		tys1 = tyd1;
+	}
+	if(yd2 != 0) {
+		xs2 = xd2 / yd2;
+		txs2 = txd2 / yd2;
+		tys2 = tyd2 / yd2;
+	}
+	else {
+		xs2 = xd2;
+		txs2 = txd2;
+		tys2 = tyd2;
+	}
+	if(yd3 != 0) {
+		xs3 = xd3 / yd3;
+		txs3 = txd3 / yd3;
+		tys3 = tyd3 / yd3;
+	}
+	else  {
+		xs3 = xd3;
+		txs3 = txd3;
+		tys3 = tyd3;
+	}
+	
+	/*
+	 Variable meanings:
+	
+	 xs? xstep=delta x
+	 txs? delta tx
+	 tys? delta ty
+	 xd? xdelta
+	 yd? dunno
+	 txd?  "
+	 tyd?  "
+	 xw? current x-value used in loop
+	 txw? for tx
+	 tyw? for ty
+	*/
+	/*
+	 Start values for the first part (up to y of point 2)
+	 xw1 and xw2 are x-values for the current line. The triangle is drawn from
+	 top to bottom line after line...
+	 txw, tyw and gw are values for texture and brightness
+	 always for start- and ending-point of the current line
+	 A line is also called "Span".
+	*/
+
+	int32_t xw1 = dataa[0]; //pax
+	int32_t xw2 = dataa[0];
+	int32_t txw1 = dataa[2]; //tax
+	int32_t txw2 = dataa[2];
+	int32_t tyw1 = dataa[3]; //tay
+	int32_t tyw2 = dataa[3];
+
+	if (yd1) {
+		for (int sz = dataa[1]; sz <= datab[1]; sz++) {
+			// draw if y is inside the screen (clipping)   
+			if (sz >=h )
+				break;
+			if (sz >= 0 && sz < h) {
+				if ((xw1 < 0 && xw1 < 0) || (xw1 >= w && xw2 >= w))
+					goto skip_span;
+				int xed = (xw1 < xw2) ? xw1 : xw2;
+				int xed2 = (xw1 < xw2) ? xw2 : xw1;
+				if (xed < 0) xed = 0;
+				if (xed2 >= w) xed2 = w - 1;
+
+				int clear_w = (xed == xed2) ? 1 : xed2 - xed;
+				memset((uint8_t *)(uint32_t)(dest + xed + (sz * w)), u8_fg, clear_w);
+				//acc_clear_buffer(dest + xed + (sz * w), clear_w, 1, w, u8_fg, 1);
+
+				/*if (xw2 > 0 && xw1 > 0 && xw2 < (w - 1) && xw1 < (w - 1)) {
+					if (xw2 == xw1)
+						((uint8_t *)dest)[xw1 + (sz * w)] = u8_fg;
+					else if (xw1 < xw2)
+						acc_clear_buffer(dest + xw1 + (sz * w), xw2 - xw1, 1, w, u8_fg, 1);
+					else
+						acc_clear_buffer(dest + xw2 + (sz * w), xw1 - xw2, 1, w, u8_fg, 1);
+				}*/
+				skip_span:;
+			}
+			xw1 += xs1;
+			xw2 += xs2;
+			txw1 += txs1;
+			txw2 += txs2;
+			tyw1 += tys1;
+			tyw2 += tys2;
+		}
+	}
+	
+	/*
+	 New start values for the second part of the triangle
+	*/
+	xw1 = datab[0] + xs3;
+	txw1 = datab[2] + txs3;
+	tyw1 = datab[3] + tys3;
+
+	if (yd3) { //If Span-Height 1 or higher
+		for (int sz=datab[1] + 1; sz < datac[1]; sz++)
+		{
+			if (sz >=h )
+				break;
+
+			if (sz >= 0 && sz < (h - 1)) {
+				if ((xw1 < 0 && xw1 < 0) || (xw1 >= w && xw2 >= w))
+					goto skip_span2;
+				int xed = (xw1 < xw2) ? xw1 : xw2;
+				int xed2 = (xw1 < xw2) ? xw2 : xw1;
+				if (xed < 0) xed = 0;
+				if (xed2 >= w) xed2 = w - 1;
+
+				int clear_w = (xed == xed2) ? 1 : xed2 - xed;
+				memset((uint8_t *)(uint32_t)(dest + xed + (sz * w)), u8_fg, clear_w);
+				//acc_clear_buffer(dest + xed + (sz * w), clear_w, 1, w, u8_fg, 1);
+
+				/*if (xw2 > 0 && xw1 > 0 && xw2 < (w - 1) && xw1 < (w - 1)) {
+					if (xw2 == xw1)
+						((uint8_t *)dest)[xw1 + (sz * w)] = u8_fg;
+					else if (xw1 < xw2)
+						acc_clear_buffer(dest + xw1 + (sz * w), xw2 - xw1, 1, w, u8_fg, 1);
+					else
+						acc_clear_buffer(dest + xw2 + (sz * w), xw1 - xw2, 1, w, u8_fg, 1);
+				}*/
+				skip_span2:;
+			}
+			xw1 += xs3;
+			xw2 += xs2;
+			txw1 += txs3;
+			txw2 += txs2;
+			tyw1 += tys3;
+			tyw2 += tys2;
+		}
+	}
+};

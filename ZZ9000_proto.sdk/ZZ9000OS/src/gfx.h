@@ -21,6 +21,16 @@ typedef struct Vec2 {
 	float y;
 } Vec2;
 
+typedef struct {
+	int32_t	a[5];
+	int32_t	b[5];
+	int32_t	c[5];
+} TriangleDef;
+
+typedef struct {
+	int32_t a[2];
+} vec2_i32;
+
 void set_fb(uint32_t* fb_, uint32_t pitch);
 void update_hw_sprite(uint8_t *data, uint32_t *colors, uint16_t w, uint16_t h);
 void update_hw_sprite_clut(uint8_t *data_, uint8_t *colors, uint16_t w, uint16_t h, uint8_t keycolor);
@@ -58,6 +68,9 @@ void acc_blit_rect_16to8(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, ui
 void acc_draw_line(uint32_t dest, uint16_t pitch, int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint32_t color, uint8_t bpp, uint8_t pen_width, uint8_t pen_height);
 void acc_fill_rect(uint32_t dest, uint16_t pitch, int16_t x, int16_t y, int16_t w, int16_t h, uint32_t fg_color, uint8_t bpp);
 void acc_draw_circle(uint32_t dest, uint16_t pitch, int16_t x, int16_t y, int16_t r, int16_t w, int16_t h, uint32_t fg_color, uint8_t bpp);
+void acc_fill_circle(uint32_t dest, uint16_t pitch, int16_t x0, int16_t y0, int16_t r, int16_t w, int16_t h, uint32_t fg_color, uint8_t bpp);
+
+void acc_fill_flat_tri(uint32_t dest, TriangleDef *d, uint16_t w, uint16_t h, uint32_t fg_color, uint8_t bpp);
 
 void *get_color_conversion_table(int index);
 
@@ -539,6 +552,7 @@ enum gfx_dma_op {
   OP_SPRITE_COLOR,
   OP_SPRITE_BITMAP,
   OP_SPRITE_CLUT_BITMAP,
+  OP_ETH_USB_OFFSETS,
   OP_NUM,
 };
 
@@ -553,6 +567,9 @@ enum gfx_acc_op {
   ACC_OP_DRAW_LINE,
   ACC_OP_FILL_RECT,
   ACC_OP_DRAW_CIRCLE,
+  ACC_OP_FILL_CIRCLE,
+  ACC_OP_DRAW_FLAT_TRI,
+  ACC_OP_DRAW_TEX_TRI,
   ACC_OP_NUM,
 };
 
