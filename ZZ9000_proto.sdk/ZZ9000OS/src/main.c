@@ -1072,6 +1072,8 @@ int main() {
 	int custom_vmode_param = VMODE_PARAM_HRES;
 	uint8_t debug_dma_op[OP_NUM];
 
+	memset((void *)debug_dma_op, 0x00, OP_NUM);
+
 	while (1) {
 		u32 zstate = mntzorro_read(MNTZ_BASE_ADDR, MNTZORRO_REG3);
 		zstate_raw = zstate;
