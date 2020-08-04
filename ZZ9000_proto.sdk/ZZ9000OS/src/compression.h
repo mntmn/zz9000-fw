@@ -4,3 +4,8 @@ void Codec37Decoder_Init(int idx, int width, int height);
 void Codec37Decoder_decode(int idx, uint8_t *dst, uint8_t *src);
 int Codec37Decoder_GetCur();
 void Codec37Decoder_Next();
+
+void Codec47Decoder_Init(int idx, int width, int height);
+void Codec47Decoder_decode(int idx, uint8_t *dst, uint8_t *src);
+int Codec47Decoder_GetCur();
+void Codec47Decoder_Next();

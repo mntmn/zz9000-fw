@@ -208,7 +208,7 @@ void hdmi_ctrl_init() {
 
 	u8 buffer[2];
 	status = hdmi_ctrl_read_byte(0x1b, buffer);
-	printf("[%d] TPI device id: 0x%x\n", status, buffer[1]);
+	//printf("[%d] TPI device id: 0x%x\n", status, buffer[1]);
 	status = hdmi_ctrl_read_byte(0x1c, buffer);
 	//printf("[%d] TPI revision 1: 0x%x\n",status,buffer[1]);
 	//status = hdmi_ctrl_read_byte(0x1d,buffer);
@@ -216,7 +216,7 @@ void hdmi_ctrl_init() {
 	//status = hdmi_ctrl_read_byte(0x30,buffer);
 	//printf("[%d] HDCP revision: 0x%x\n",status,buffer[1]);
 	//status = hdmi_ctrl_read_byte(0x3d,buffer);
-	printf("[%d] hotplug: 0x%x\n", status, buffer[1]);
+	//printf("[%d] hotplug: 0x%x\n", status, buffer[1]);
 
 	for (int i = 0; i < sizeof(sii9022_init); i += 2) {
 		status = hdmi_ctrl_write_byte(sii9022_init[i], sii9022_init[i + 1]);
@@ -581,8 +581,8 @@ void video_formatter_init(int scalemode, int colormode, int width, int height,
 void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
 		int vhz, int hdiv, int vdiv, int hdmi) {
 
-	printf("VSI: %d x %d [%d x %d] %d MHz %d Hz, hdiv: %d vdiv: %d\n", hres,
-			vres, htotal, vtotal, mhz, vhz, hdiv, vdiv);
+	/*printf("VSI: %d x %d [%d x %d] %d MHz %d Hz, hdiv: %d vdiv: %d\n", hres,
+			vres, htotal, vtotal, mhz, vhz, hdiv, vdiv);*/
 
 	//printf("pixelclock_init()...\n");
 	pixelclock_init(mhz);
@@ -603,8 +603,8 @@ void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
 
 void video_system_init_2(struct zz_video_mode *mode, int hdiv, int vdiv) {
 
-	printf("VSI: %d x %d [%d x %d] %d MHz %d Hz, hdiv: %d vdiv: %d\n", mode->hres,
-			mode->vres, mode->hmax, mode->vmax, mode->mhz, mode->vhz, hdiv, vdiv);
+	/*printf("VSI: %d x %d [%d x %d] %d MHz %d Hz, hdiv: %d vdiv: %d\n", mode->hres,
+			mode->vres, mode->hmax, mode->vmax, mode->mhz, mode->vhz, hdiv, vdiv);*/
 
 	//printf("pixelclock_init()...\n");
 	pixelclock_init_2(mode);
@@ -899,8 +899,11 @@ struct ZZ9K_ENV {
 	char (*fn_output_event_acked)();
 };
 
-void arm_exception_handler(void *callback);
+void arm_exception_handler_id_reset(void *callback);
+void arm_exception_handler_id_data_abort(void *callback);
+void arm_exception_handler_id_prefetch_abort(void *callback);
 void arm_exception_handler_illinst(void *callback);
+void DataAbort_InterruptHandler(void *InstancePtr);
 
 volatile struct ZZ9K_ENV arm_run_env;
 volatile void (*core1_trampoline)(volatile struct ZZ9K_ENV* env);
@@ -951,11 +954,11 @@ void core1_loop() {
 
 	// FIXME these don't seem to do anything useful yet
 	Xil_ExceptionRegisterHandler(XIL_EXCEPTION_ID_RESET,
-			(Xil_ExceptionHandler) arm_exception_handler, NULL);
+			(Xil_ExceptionHandler) arm_exception_handler_id_reset, NULL);
 	Xil_ExceptionRegisterHandler(XIL_EXCEPTION_ID_DATA_ABORT_INT,
-			(Xil_ExceptionHandler) arm_exception_handler, NULL);
+			(Xil_ExceptionHandler) arm_exception_handler_id_data_abort, NULL);
 	Xil_ExceptionRegisterHandler(XIL_EXCEPTION_ID_PREFETCH_ABORT_INT,
-			(Xil_ExceptionHandler) arm_exception_handler, NULL);
+			(Xil_ExceptionHandler) arm_exception_handler_id_prefetch_abort, NULL);
 	Xil_ExceptionRegisterHandler(XIL_EXCEPTION_ID_UNDEFINED_INT,
 			(Xil_ExceptionHandler) arm_exception_handler_illinst, NULL);
 
@@ -999,11 +1002,13 @@ int main() {
 	init_platform();
 
 	Xil_ExceptionRegisterHandler(XIL_EXCEPTION_ID_DATA_ABORT_INT,
-			(Xil_ExceptionHandler) arm_exception_handler, NULL);
+			(Xil_ExceptionHandler) arm_exception_handler_id_data_abort, NULL);
 	Xil_ExceptionRegisterHandler(XIL_EXCEPTION_ID_PREFETCH_ABORT_INT,
-			(Xil_ExceptionHandler) arm_exception_handler, NULL);
+			(Xil_ExceptionHandler) arm_exception_handler_id_prefetch_abort, NULL);
 	Xil_ExceptionRegisterHandler(XIL_EXCEPTION_ID_UNDEFINED_INT,
 			(Xil_ExceptionHandler) arm_exception_handler_illinst, NULL);
+
+	memset((u32 *)Z3_SCRATCH_ADDR, 0, sizeof(struct GFXData));
 
 	disable_reset_out();
 
@@ -1195,21 +1200,22 @@ int main() {
 					// enable/disable INT6, currently used to signal incoming ethernet packets
 					interrupt_enabled = zdata & 1;
 					break;
-				case REG_ZZ_MODE:
-					printf("mode change: %lx\n", zdata);
+				case REG_ZZ_MODE: {
+					//printf("mode change: %lx\n", zdata);
 
 					int mode = zdata & 0xff;
 					colormode = (zdata & 0xf00) >> 8;
 					scalemode = (zdata & 0xf000) >> 12;
-					printf("mode: %d color: %d scale: %d\n", mode,
-							colormode, scalemode);
+					/*printf("mode: %d color: %d scale: %d\n", mode,
+							colormode, scalemode);*/
 
 					video_mode_init(mode, scalemode, colormode);
 					// remember selected video mode
 					video_mode = zdata;
 					break;
+				}
 				case REG_ZZ_VCAP_MODE:
-					printf("videocap default mode select: %lx\n", zdata);
+					//printf("videocap default mode select: %lx\n", zdata);
 
 					videocap_video_mode = zdata &0xff;
 					break;
@@ -1278,8 +1284,8 @@ int main() {
 				}
 				case REG_ZZ_SPRITE_COLORS: {
 					sprite_colors[zdata] = (blitter_user1 << 16) | blitter_user2;
-					if (data->u8offset != 0 && sprite_colors[data->u8offset] == 0xff00ff)
-                		sprite_colors[data->u8offset] = 0xfe00fe;
+					if (zdata != 0 && sprite_colors[zdata] == 0xff00ff)
+                		sprite_colors[zdata] = 0xfe00fe;
 					break;
 				}
 				case REG_ZZ_SRC_PITCH:
@@ -1952,6 +1958,24 @@ int main() {
 	return 0;
 }
 
+void arm_exception_handler_id_reset(void *callback) {
+	printf("id_reset: arm_exception_handler()!\n");
+	while (1) {
+	}
+}
+
+void arm_exception_handler_id_data_abort(void *callback) {
+	printf("id_data_abort: arm_exception_handler()!\n");
+	while (1) {
+	}
+}
+
+void arm_exception_handler_id_prefetch_abort(void *callback) {
+	printf("id_prefetch_abort: arm_exception_handler()!\n");
+	while (1) {
+	}
+}
+
 void arm_exception_handler(void *callback) {
 	printf("arm_exception_handler()!\n");
 	while (1) {
@@ -1962,4 +1986,11 @@ void arm_exception_handler_illinst(void *callback) {
 	printf("arm_exception_handler_illinst()!\n");
 	while (1) {
 	}
+}
+
+void DataAbort_InterruptHandler(void *InstancePtr) {
+	printf("Data abort exception on %s, address %p\n", write_probe ? "write" : "read", mem_test_addr);
+	//mem_test_addr += 1;
+	//xil_printf("Data abort: i: 0x%08x, i*64: 0x%08x, p: 0x%08x\r\n", i, i * 64, x + (i * 64));
+	while(1) {}
 }

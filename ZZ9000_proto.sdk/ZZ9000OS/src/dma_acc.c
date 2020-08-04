@@ -221,6 +221,11 @@ void handle_acc_op(uint16_t zdata)
                     Codec37Decoder_decode(Codec37Decoder_GetCur(), (uint8_t *)data->offset[0] + dest_offset, (uint8_t *)data->clut4);
                     break;
                 }
+                case ACC_CMPTYPE_SMUSH_CODEC47: {
+                    uint32_t dest_offset = data->x[0] + (data->pitch[0] * data->y[0]);
+                    Codec47Decoder_decode(Codec47Decoder_GetCur(), (uint8_t *)data->offset[0] + dest_offset, (uint8_t *)data->clut4);
+                    break;
+                }
             }
             break;
         case ACC_OP_COMPRESS:
@@ -238,6 +243,19 @@ void handle_acc_op(uint16_t zdata)
                     else {
                         printf("Switching to next codec37 decoder.\n");
                         Codec37Decoder_Next();
+                    }
+                    break;
+                case ACC_CMPTYPE_SMUSH_CODEC47:
+                    if (data->u8_user[1] == 1) {
+                        SWAP16(data->x[0]);
+                        SWAP16(data->y[0]);
+                        Codec47Decoder_Init(Codec47Decoder_GetCur(), data->x[0], data->y[0]);
+                        printf("Initializing codec37 decoder %d: %dx%d\n", Codec47Decoder_GetCur(), data->x[0], data->y[0]);
+                        data->u8_user[2] = Codec47Decoder_GetCur() + 1;
+                    }
+                    else {
+                        printf("Switching to next codec37 decoder.\n");
+                        Codec47Decoder_Next();
                     }
                     break;
             }

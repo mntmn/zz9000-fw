@@ -4,7 +4,7 @@
 
 void bompDecodeLine(uint8_t *dst, const uint8_t *src, int len);
 
-int num_decoders = 0;
+static int num_decoders = 0;
 
 struct Codec37Decoder c37_decoders[4];
 

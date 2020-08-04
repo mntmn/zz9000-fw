@@ -594,6 +594,7 @@ enum gfx_acc_op {
 enum compression_types {
   ACC_CMPTYPE_SMUSH_CODEC1,
   ACC_CMPTYPE_SMUSH_CODEC37,
+  ACC_CMPTYPE_SMUSH_CODEC47,
   ACC_CMPTYPE_NUM,
 };
 
