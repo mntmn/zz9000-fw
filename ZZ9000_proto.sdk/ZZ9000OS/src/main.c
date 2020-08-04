@@ -29,6 +29,7 @@
 #include "xil_cache.h"
 #include "xclk_wiz.h"
 #include "xil_exception.h"
+#include "xadcps.h"
 
 #include "gfx.h"
 #include "ethernet.h"
@@ -59,6 +60,24 @@ typedef u8 uint8_t;
 
 // I2C controller instance
 XIicPs Iic;
+
+// XADC adc converter instance
+XAdcPs Xadc;
+
+int xadc_init() {
+	printf("xadc_init()...");
+	XAdcPs_Config* cfg;
+	cfg = XAdcPs_LookupConfig(XPAR_XADCPS_0_DEVICE_ID);
+	XAdcPs_CfgInitialize(&Xadc, cfg, cfg->BaseAddress);
+	int status = XAdcPs_SelfTest(&Xadc);
+	printf("xadc_init() done: %d", status);
+	return status;
+}
+
+float xadc_get_temperature() {
+	u16 raw = XAdcPs_GetAdcData(&Xadc, XADCPS_CH_TEMP);
+	return XAdcPs_RawToTemperature(raw);
+}
 
 int hdmi_ctrl_write_byte(u8 addr, u8 value) {
 	u8 buffer[2];
@@ -889,6 +908,8 @@ int main() {
 
 	disable_reset_out();
 
+	xadc_init();
+
 	// FIXME constant
 	framebuffer = (u32*) 0x00200000;
 	int need_req_ack = 0;
@@ -1619,6 +1640,10 @@ int main() {
 							printf("[USB] query capacity: no device.\n");
 							data = 0;
 						}
+						break;
+					}
+					case REG_ZZ_TEMPERATURE: {
+						data = ((int16_t)(xadc_get_temperature()*10.0)) << 16;
 						break;
 					}
 				}
