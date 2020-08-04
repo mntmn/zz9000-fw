@@ -1278,7 +1278,8 @@ int main() {
 				}
 				case REG_ZZ_SPRITE_COLORS: {
 					sprite_colors[zdata] = (blitter_user1 << 16) | blitter_user2;
-					if (sprite_colors[zdata] == 0xff00ff) sprite_colors[zdata] = 0xfe00fe;
+					if (data->u8offset != 0 && sprite_colors[data->u8offset] == 0xff00ff)
+                		sprite_colors[data->u8offset] = 0xfe00fe;
 					break;
 				}
 				case REG_ZZ_SRC_PITCH:

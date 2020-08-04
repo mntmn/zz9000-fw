@@ -236,7 +236,8 @@ void handle_blitter_dma_op(uint16_t zdata)
         }
         case OP_SPRITE_COLOR: {
             sprite_colors[data->u8offset] = data->rgb[0];
-            if (sprite_colors[data->u8offset] == 0xff00ff) sprite_colors[data->u8offset] = 0xfe00fe;
+            if (data->u8offset != 0 && sprite_colors[data->u8offset] == 0xff00ff)
+                sprite_colors[data->u8offset] = 0xfe00fe;
             break;
         }
 
