@@ -2,8 +2,10 @@
 #include "gfx.h"
 #include <xil_types.h>
 #include "xil_printf.h"
+#include "compression.h"
 
 extern unsigned int cur_mem_offset;
+int current_c37_encoder = -1;
 
 void handle_acc_op(uint16_t zdata)
 {
@@ -199,8 +201,46 @@ void handle_acc_op(uint16_t zdata)
         }
         // COMPRESSION/DECOMPRESSION OPS
         case ACC_OP_DECOMPRESS:
+            SWAP16(data->x[0]); SWAP16(data->y[0]);
+            SWAP16(data->x[1]); SWAP16(data->y[1]);
+            
+            SWAP32(data->offset[0]);
+            data->offset[0] += ADDR_ADJ;
+            data->offset[0] &= 0x0FFFFFFF;
+            SWAP16(data->pitch[0]);
+            SWAP32(data->u32_user[0]);
+
+            switch(data->u8_user[0]) {
+                case ACC_CMPTYPE_SMUSH_CODEC1: {
+                    uint32_t dest_offset = data->x[0] + (data->pitch[0] * data->y[0]);
+                    decompress_rle_smush1_data((uint8_t *)data->clut4, (uint8_t *)data->offset[0] + dest_offset, data->u32_user[0], data->x[1], data->y[1], data->pitch[0]);
+                    break;
+                }
+                case ACC_CMPTYPE_SMUSH_CODEC37: {
+                    uint32_t dest_offset = data->x[0] + (data->pitch[0] * data->y[0]);
+                    Codec37Decoder_decode(Codec37Decoder_GetCur(), (uint8_t *)data->offset[0] + dest_offset, (uint8_t *)data->clut4);
+                    break;
+                }
+            }
             break;
         case ACC_OP_COMPRESS:
+            break;
+        case ACC_OP_CODEC_OP:
+            switch(data->u8_user[0]) {
+                case ACC_CMPTYPE_SMUSH_CODEC37:
+                    if (data->u8_user[1] == 1) {
+                        SWAP16(data->x[0]);
+                        SWAP16(data->y[0]);
+                        Codec37Decoder_Init(Codec37Decoder_GetCur(), data->x[0], data->y[0]);
+                        printf("Initializing codec37 decoder %d: %dx%d\n", Codec37Decoder_GetCur(), data->x[0], data->y[0]);
+                        data->u8_user[2] = Codec37Decoder_GetCur() + 1;
+                    }
+                    else {
+                        printf("Switching to next codec37 decoder.\n");
+                        Codec37Decoder_Next();
+                    }
+                    break;
+            }
             break;
         default:
             break;

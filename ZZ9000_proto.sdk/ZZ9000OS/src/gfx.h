@@ -49,6 +49,7 @@ typedef struct {
 
 void video_formatter_write(uint32_t data, uint16_t op);
 void handle_blitter_dma_op(uint16_t zdata);
+void handle_acc_op(uint16_t zdata);
 
 void set_fb(uint32_t* fb_, uint32_t pitch);
 void update_hw_sprite(uint8_t *data, uint32_t *colors, uint16_t w, uint16_t h);
@@ -586,11 +587,13 @@ enum gfx_acc_op {
   ACC_OP_DRAW_TEX_TRI,
   ACC_OP_DECOMPRESS,
   ACC_OP_COMPRESS,
+  ACC_OP_CODEC_OP,
   ACC_OP_NUM,
 };
 
 enum compression_types {
   ACC_CMPTYPE_SMUSH_CODEC1,
+  ACC_CMPTYPE_SMUSH_CODEC37,
   ACC_CMPTYPE_NUM,
 };
 
