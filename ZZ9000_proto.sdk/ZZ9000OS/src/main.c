@@ -59,9 +59,6 @@ typedef u8 uint8_t;
 
 #define I2C_PAUSE 10
 
-#define Z3_SCRATCH_ADDR 0x33F0000
-#define ADDR_ADJ 0x1F0000
-
 // I2C controller instance
 XIicPs Iic;
 
@@ -94,15 +91,13 @@ float xadc_get_int_voltage() {
 }
 
 // TODO: document what this does
-unsigned int cur_mem_offset = 0x3400000;
+unsigned int cur_mem_offset = 0x3500000;
 
 int hdmi_ctrl_write_byte(u8 addr, u8 value) {
 	u8 buffer[2];
 	buffer[0] = addr;
 	buffer[1] = value;
 	int status;
-
-	malloc(50);
 
 	while (XIicPs_BusIsBusy(&Iic)) {
 	};
@@ -232,6 +227,8 @@ void hdmi_ctrl_init() {
 XAxiVdma vdma;
 u32* framebuffer = 0;
 u32 framebuffer_pan_offset = 0;
+u32 framebuffer_pan_offset_old = 0;
+u32 request_video_align = 0;
 static u32 blitter_dst_offset = 0;
 static u32 blitter_src_offset = 0;
 static u32 vmode_hsize = 800, vmode_vsize = 600, vmode_hdiv = 1, vmode_vdiv = 2;
@@ -553,17 +550,6 @@ void video_formatter_valign() {
 }
 
 #define VF_DLY ;
-#define MNTVF_OP_UNUSED 12
-#define MNTVF_OP_SPRITE_XY 13
-#define MNTVF_OP_SPRITE_ADDR 14
-#define MNTVF_OP_SPRITE_DATA 15
-#define MNTVF_OP_MAX 6
-#define MNTVF_OP_HS 7
-#define MNTVF_OP_VS 8
-#define MNTVF_OP_POLARITY 10
-#define MNTVF_OP_SCALE 4
-#define MNTVF_OP_DIMENSIONS 2
-#define MNTVF_OP_COLORMODE 1
 
 void video_formatter_write(uint32_t data, uint16_t op) {
 	mntzorro_write(MNTZ_BASE_ADDR, MNTZORRO_REG3, data);
@@ -682,16 +668,16 @@ void video_mode_init(int mode, int scalemode, int colormode) {
 
 int16_t sprite_x = 0, sprite_x_adj = 0, sprite_x_base = 0;
 int16_t sprite_y = 0, sprite_y_adj = 0, sprite_y_base = 0;
-uint16_t sprite_enabled = 0;
-uint32_t sprite_buf[32 * 48];
-uint8_t sprite_clipped = 0;
-int16_t sprite_clip_x = 0, sprite_clip_y = 0;
-
 int16_t sprite_x_offset = 0;
 int16_t sprite_y_offset = 0;
 
+uint16_t sprite_enabled = 0;
 uint8_t sprite_width  = 16;
 uint8_t sprite_height = 16;
+
+uint32_t sprite_buf[32 * 48];
+uint8_t sprite_clipped = 0;
+int16_t sprite_clip_x = 0, sprite_clip_y = 0;
 
 uint32_t sprite_colors[4] = { 0x00ff00ff, 0x00000000, 0x00000000, 0x00000000 };
 
@@ -1065,7 +1051,6 @@ int main() {
 	u32 zstate_raw;
 	int interlace_old = 0;
 	int videocap_ntsc_old = 0;
-	u32 *crab;
 
 	handle_amiga_reset();
 
@@ -1088,13 +1073,13 @@ int main() {
 	int cache_counter = 0;
 	int videocap_enabled_old = 1;
 	int colormode = 0;
-	uint32_t framebuffer_pan_offset_old = framebuffer_pan_offset;
+	framebuffer_pan_offset_old = framebuffer_pan_offset;
 	video_mode = 0x2200;
 
 	int backlog_nag_counter = 0;
 	int interrupt_enabled = 0;
 
-	int request_video_align=0;
+	request_video_align = 0;
 //	int old_vblank = 0;
 //	XTime time1 = 0, time2 = 0;
 	int vblank=0;
@@ -1102,9 +1087,6 @@ int main() {
 
 	int custom_video_mode = ZZVMODE_CUSTOM;
 	int custom_vmode_param = VMODE_PARAM_HRES;
-	uint8_t debug_dma_op[OP_NUM];
-
-	memset((void *)debug_dma_op, 0x00, OP_NUM);
 
 	while (1) {
 		u32 zstate = mntzorro_read(MNTZ_BASE_ADDR, MNTZORRO_REG3);
@@ -1355,433 +1337,15 @@ int main() {
 					rect_rgb2 |= (((zdata & 0xff) << 8) | zdata >> 8) << 16;
 					break;
 
-				// Generic graphics acceleration
+				// Generic acceleration ops
 				case REG_ZZ_ACC_OP: {
-					struct GFXData *data = (struct GFXData*)((u32)Z3_SCRATCH_ADDR);
-					//int cf_bpp[MNTVA_COLOR_NUM] = { 1, 2, 4, -8, 2, };
-
-					switch (zdata) {
-						// SURFACE BLIT OPS
-						case ACC_OP_NONE: {
-							SWAP32(data->offset[0]);
-							SWAP32(data->offset[1]);
-
-							printf ("%s: %d - %d\n", data->clut2, data->offset[0], data->offset[1]);
-							break;
-						}
-						case ACC_OP_BUFFER_CLEAR: {
-							SWAP16(data->x[0]);
-							SWAP16(data->y[0]);
-
-							SWAP16(data->pitch[0]);
-							SWAP32(data->offset[0]);
-							data->offset[0] += ADDR_ADJ;
-
-							acc_clear_buffer(data->offset[0], data->x[0], data->y[0], data->pitch[0], data->rgb[0], data->u8_user[GFXDATA_U8_COLORMODE]);
-							break;
-						}
-						case ACC_OP_BUFFER_FLIP:
-							SWAP16(data->x[0]);
-							SWAP16(data->y[0]);
-
-							SWAP16(data->pitch[0]);
-							SWAP32(data->offset[0]);
-							SWAP32(data->offset[1]);
-							data->offset[0] += ADDR_ADJ;
-							data->offset[1] += ADDR_ADJ;
-
-							acc_flip_to_fb(data->offset[0], data->offset[1], data->x[0], data->y[0], data->pitch[0], data->u8_user[GFXDATA_U8_COLORMODE]);
-							break;
-						case ACC_OP_BLIT_RECT:
-							SWAP16(data->x[0]); SWAP16(data->y[0]);
-							SWAP16(data->x[1]); SWAP16(data->y[1]);
-
-							SWAP16(data->pitch[0]);
-							SWAP16(data->pitch[1]);
-							SWAP32(data->offset[0]);
-							SWAP32(data->offset[1]);
-							data->offset[0] += ADDR_ADJ;
-							data->offset[1] += ADDR_ADJ;
-
-							//printf("BLAB: %p\n", (void *)data->offset[0]);
-							if (data->u8_user[0] != data->u8_user[1]) {
-								if (data->u8_user[0] == 2 && data->u8_user[1] == 1) {
-									acc_blit_rect_16to8(data->offset[0], data->offset[1], data->x[0], data->y[0], data->x[1], data->y[1], data->pitch[0], data->pitch[1]);
-									break;
-								}
-								else
-									printf ("Unimplemented color conversion %d to %d\n", data->u8_user[0], data->u8_user[1]);
-							}
-							acc_blit_rect(data->offset[0], data->offset[1], data->x[0], data->y[0], data->x[1] * data->u8_user[0], data->y[1], data->pitch[0], data->pitch[1], data->u8_user[2], data->u8offset);
-							break;
-						// PRIMITIVE OPS
-						case ACC_OP_DRAW_CIRCLE:
-						case ACC_OP_FILL_CIRCLE:
-							SWAP16(data->x[0]); SWAP16(data->y[0]);
-							SWAP16(data->x[1]); SWAP16(data->y[1]);
-							SWAP16(data->x[2]); SWAP16(data->y[2]);
-							
-							SWAP32(data->offset[0]);
-							SWAP16(data->pitch[0]);
-							data->offset[0] += ADDR_ADJ;
-
-							if (zdata == ACC_OP_DRAW_CIRCLE)
-								acc_draw_circle(data->offset[0], data->pitch[0], data->x[0], data->y[0], data->x[2], data->x[1], data->y[1], data->rgb[0], data->u8_user[0]);
-							else
-								acc_fill_circle(data->offset[0], data->pitch[0], data->x[0], data->y[0], data->x[2], data->x[1], data->y[1], data->rgb[0], data->u8_user[0]);
-							break;
-						case ACC_OP_DRAW_LINE:
-							SWAP16(data->x[0]); SWAP16(data->y[0]);
-							SWAP16(data->x[1]); SWAP16(data->y[1]);
-
-							SWAP32(data->offset[0]);
-							SWAP16(data->pitch[0]);
-							data->offset[0] += ADDR_ADJ;
-
-							//printf("Drawing line from %d,%d to %d,%d...\n", data->x[0], data->y[0], data->x[1], data->y[1]);
-							acc_draw_line(data->offset[0], data->pitch[0], data->x[0], data->y[0], data->x[1], data->y[1], data->rgb[0], data->u8_user[0], data->u8_user[1], data->u8_user[2]);
-							break;
-						case ACC_OP_FILL_RECT:
-							SWAP16(data->x[0]); SWAP16(data->y[0]);
-							SWAP16(data->x[1]); SWAP16(data->y[1]);
-
-							SWAP32(data->offset[0]);
-							SWAP16(data->pitch[0]);
-							data->offset[0] += ADDR_ADJ;
-
-							//printf("Filling rect at %d,%d to %d,%d...\n", data->x[0], data->y[0], data->x[0] + data->x[1], data->y[0] + data->y[1]);
-							acc_fill_rect(data->offset[0], data->pitch[0], data->x[0], data->y[0], data->x[1], data->y[1], data->rgb[0], data->u8_user[0]);
-							break;
-						case ACC_OP_DRAW_FLAT_TRI: {
-							TriangleDef tridef;
-							memset(&tridef, 0x00, sizeof(TriangleDef));
-							uint32_t *pts_ptr = (uint32_t *)data->clut4;
-
-							SWAP16(data->x[0]); SWAP16(data->y[0]);
-
-							SWAP32(data->offset[0]);
-							SWAP16(data->pitch[0]);
-							data->offset[0] += ADDR_ADJ;
-
-							tridef.a[0] = SWAP32(pts_ptr[0]);
-							tridef.a[1] = SWAP32(pts_ptr[1]);
-							tridef.b[0] = SWAP32(pts_ptr[2]);
-							tridef.b[1] = SWAP32(pts_ptr[3]);
-							tridef.c[0] = SWAP32(pts_ptr[4]);
-							tridef.c[1] = SWAP32(pts_ptr[5]);
-
-							acc_fill_flat_tri(data->offset[0], &tridef, data->x[0], data->y[0], data->rgb[0], data->u8_user[0]);
-							break;
-						}
-						// ALLOC/DATA OPS
-						case ACC_OP_ALLOC_SURFACE: {
-							unsigned int sfc_size = 0;
-							data->offset[0] = 0;
-							if (data->u8_user[1] == 1) {
-								SWAP32(data->offset[1]);
-								sfc_size = data->offset[1];
-							}
-							else {
-								SWAP16(data->x[0]); SWAP16(data->y[0]);
-								data->offset[0] = 0;
-								sfc_size = ((data->x[0] * data->u8_user[0]) * data->y[0]);
-
-							}
-
-							unsigned int barf = sfc_size % 256;
-							if (barf)
-								sfc_size += (256 - barf);
-
-							if (data->u8_user[1] == 1) {
-								printf ("Alloc requested for %d bytes.\n", data->offset[1]);
-							}
-							else {
-								printf ("Alloc requested for %dx%d surface, %.2X bytes per pixel, %d bytes.\n", data->x[0], data->y[0], data->u8_user[0], sfc_size);
-							}
-							if (!sfc_size) {
-								printf("Refusing to allocate 0 bytes for you.\n");
-								break;
-							}
-
-							//uint8_t *p = malloc(sfc_size);
-							//memset(p, 0x00, sfc_size);
-							//allocated_surfaces++;
-							//printf ("Surface allocated at offset %.8X, or %.8X on the Amiga side.\n", cur_mem_offset, cur_mem_offset - ADDR_ADJ);
-
-							data->offset[0] = cur_mem_offset - ADDR_ADJ;
-							memset((void *)cur_mem_offset, 0x00, sfc_size);
-							cur_mem_offset += sfc_size;
-							SWAP32(data->offset[0]);
-							break;
-						}
-						case ACC_OP_FREE_SURFACE: {
-							SWAP32(data->offset[0]);
-							data->offset[0] += ADDR_ADJ;
-							void *ape = (void*)data->offset[0];
-							if (data->u8_user[0]) {
-								printf("[%s] Freeing surface at %p... Not really.\n", data->clut2, ape);
-							}
-							//else
-								//printf("Freeing surface at %p... Not really.\n", ape);
-							data->offset[0] = 0;
-
-							//free(ape);
-							//printf(" freed!\n");
-							break;
-						}
-						case ACC_OP_SET_BPP_CONVERSION_TABLE: {
-							// TODO:
-							// Add some thing to select table based on source and dest bpp.
-							// Requires the destination 8bpp palette to be in R3G3B2 format to look "correct" out of the box.
-							SWAP32(data->offset[0]);
-							data->offset[0] += ADDR_ADJ;
-
-							printf("Setting color conversion table...\n");
-							memcpy(get_color_conversion_table(0), (void*)data->offset[0], 65536);
-							break;
-						}
-						default:
-							break;
-					}
+					handle_acc_op(zdata);
 					break;
 				}
 
 				// DMA RTG rendering
 				case REG_ZZ_BITTER_DMA_OP: {
-					struct GFXData *data = (struct GFXData*)((u32)Z3_SCRATCH_ADDR);
-					switch(zdata) {
-						case OP_DRAWLINE:
-							SWAP16(data->x[0]);		SWAP16(data->x[1]);
-							SWAP16(data->y[0]);		SWAP16(data->y[1]);
-							SWAP16(data->user[0]);	SWAP16(data->user[1]);
-
-							SWAP16(data->pitch[0]);
-							SWAP32(data->offset[0]);
-
-							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
-									data->pitch[0]);
-
-							if (data->user[1] == 0xFFFF && data->mask == 0xFF)
-								draw_line_solid(data->x[0], data->y[0], data->x[1], data->y[1],
-										data->user[0], data->rgb[0],
-										data->u8_user[GFXDATA_U8_COLORMODE]);
-							else
-								draw_line(data->x[0], data->y[0], data->x[1], data->y[1],
-										data->user[0], data->user[1], data->user[2], data->rgb[0], data->rgb[1],
-										data->u8_user[GFXDATA_U8_COLORMODE], data->mask, data->u8_user[GFXDATA_U8_DRAWMODE]);
-							
-							break;
-						
-						case OP_FILLRECT:
-							SWAP16(data->x[0]);		SWAP16(data->x[1]);
-							SWAP16(data->y[0]);		SWAP16(data->y[1]);
-
-							SWAP16(data->pitch[0]);
-							SWAP32(data->offset[0]);
-
-							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
-									data->pitch[0]);
-
-							if (data->mask == 0xFF)
-								fill_rect_solid(data->x[0], data->y[0], data->x[1], data->y[1],
-										data->rgb[0], data->u8_user[GFXDATA_U8_COLORMODE]);
-							else
-								fill_rect(data->x[0], data->y[0], data->x[1], data->y[1], data->rgb[0],
-										data->u8_user[GFXDATA_U8_COLORMODE], data->mask);
-							break;
-
-						case OP_COPYRECT:
-						case OP_COPYRECT_NOMASK:
-							SWAP16(data->x[0]);		SWAP16(data->x[1]);		SWAP16(data->x[2]);
-							SWAP16(data->y[0]);		SWAP16(data->y[1]);		SWAP16(data->y[2]);
-
-							SWAP16(data->pitch[0]);		SWAP16(data->pitch[1]);
-							SWAP32(data->offset[0]);	SWAP32(data->offset[1]);
-
-							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
-									data->pitch[0]);
-
-							switch (zdata) {
-							case 3: // Regular BlitRect
-								if (data->mask == 0xFF || (data->mask != 0xFF && data->u8_user[GFXDATA_U8_COLORMODE] != MNTVA_COLOR_8BIT))
-									copy_rect_nomask(data->x[0], data->y[0], data->x[1], data->y[1], data->x[2],
-													data->y[2], data->u8_user[GFXDATA_U8_COLORMODE],
-													(uint32_t*) ((u32) framebuffer + data->offset[0]),
-													data->pitch[0], MINTERM_SRC);
-								else 
-									copy_rect(data->x[0], data->y[0], data->x[1], data->y[1], data->x[2],
-											data->y[2], data->u8_user[GFXDATA_U8_COLORMODE],
-											(uint32_t*) ((u32) framebuffer + data->offset[0]),
-											data->pitch[0], data->mask);
-								break;
-							case 4: // BlitRectNoMaskComplete
-								copy_rect_nomask(data->x[0], data->y[0], data->x[1], data->y[1], data->x[2],
-												data->y[2], data->u8_user[GFXDATA_U8_COLORMODE],
-												(uint32_t*) ((u32) framebuffer + data->offset[1]),
-												data->pitch[1], data->minterm);
-								break;
-							}
-							break;
-
-						case OP_RECT_PATTERN:
-						case OP_RECT_TEMPLATE: {
-							SWAP16(data->x[0]);		SWAP16(data->x[1]);		SWAP16(data->x[2]);
-							SWAP16(data->y[0]);		SWAP16(data->y[1]);		SWAP16(data->y[2]);
-
-							SWAP16(data->pitch[0]);		SWAP16(data->pitch[1]);
-							SWAP32(data->offset[0]);	SWAP32(data->offset[1]);
-
-							uint8_t* tmpl_data = (uint8_t*) ((u32) framebuffer
-									+ data->offset[1]);
-							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
-									data->pitch[0]);
-
-
-							uint8_t bpp = 2 * data->u8_user[GFXDATA_U8_COLORMODE];
-							if (bpp == 0)
-								bpp = 1;
-							uint16_t loop_rows = 0;
-
-							if (zdata == OP_RECT_PATTERN) {
-								SWAP16(data->user[0]);
-
-								loop_rows = data->user[0];
-
-								if (debug_dma_op[zdata]) {
-									printf("RectPattern:\n");
-									printf("%d, %d - %d, %d\n", data->x[0], data->y[0], data->x[0]+data->x[1], data->y[0]+data->y[1]);
-									printf("M:%.2X R: %d D: %d\n", data->mask, data->user[0], data->u8_user[GFXDATA_U8_DRAWMODE]);
-								}
-
-								pattern_fill_rect(data->u8_user[GFXDATA_U8_COLORMODE],
-										data->x[0], data->y[0], data->x[1], data->y[1],
-										data->u8_user[GFXDATA_U8_DRAWMODE], data->mask,
-										data->rgb[0], data->rgb[1], data->x[2], data->y[2],
-										tmpl_data, 16, loop_rows);
-							}
-							else {
-								if (debug_dma_op[zdata]) {
-									printf("RectTemplate:\n");
-									printf("%d, %d - %d, %d\n", data->x[0], data->y[0], data->x[0]+data->x[1], data->y[0]+data->y[1]);
-									printf("M:%.2X R: %d D: %d\n", data->mask, data->user[0], data->u8_user[GFXDATA_U8_DRAWMODE]);
-								}
-
-								template_fill_rect(data->u8_user[GFXDATA_U8_COLORMODE], data->x[0],
-										data->y[0], data->x[1], data->y[1], data->u8_user[GFXDATA_U8_DRAWMODE], data->mask,
-										data->rgb[0], data->rgb[1], data->x[2], data->y[2], tmpl_data,
-										data->pitch[1]);
-							}
-							
-							break;
-						}
-
-						case OP_P2C:
-						case OP_P2D: {
-							SWAP16(data->x[0]);		SWAP16(data->x[1]);		SWAP16(data->x[2]);
-							SWAP16(data->y[0]);		SWAP16(data->y[1]);		SWAP16(data->y[2]);
-
-							SWAP16(data->pitch[0]);		SWAP16(data->pitch[1]);
-							SWAP32(data->offset[0]);	SWAP32(data->offset[1]);
-
-							SWAP16(data->user[0]);
-							SWAP16(data->user[1]);
-
-							uint8_t* bmp_data = (uint8_t*) ((u32) framebuffer
-									+ data->offset[1]);
-
-							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
-									data->pitch[0]);
-
-							if (zdata == OP_P2C) {
-								p2c_rect(data->x[0], 0, data->x[1], data->y[1], data->x[2],
-										data->y[2], data->minterm, data->user[1], data->mask,
-										data->user[0], data->pitch[1], bmp_data);
-							}
-							else {
-								SWAP32(data->rgb[0]);
-								p2d_rect(data->x[0], 0, data->x[1], data->y[1], data->x[2],
-										data->y[2], data->minterm, data->user[1], data->mask, data->user[0],
-										data->rgb[0], data->pitch[1], bmp_data, data->u8_user[GFXDATA_U8_COLORMODE]);
-							}
-							break;
-						}
-
-						case OP_INVERTRECT:
-							SWAP16(data->x[0]);		SWAP16(data->x[1]);
-							SWAP16(data->y[0]);		SWAP16(data->y[1]);
-
-							SWAP16(data->pitch[0]);
-							SWAP32(data->offset[0]);
-
-							set_fb((uint32_t*) ((u32) framebuffer + data->offset[0]),
-									data->pitch[0]);
-							invert_rect(data->x[0], data->y[0], data->x[1], data->y[1],
-									data->mask, data->u8_user[GFXDATA_U8_COLORMODE]);
-							break;
-
-						case OP_SPRITE_XY:
-							if (!sprite_enabled)
-								break;
-
-							SWAP16(data->x[0]);
-							SWAP16(data->y[0]);
-
-							sprite_x_base = (int16_t)data->x[0];
-							sprite_y_base = (int16_t)data->y[0];
-
-							update_hw_sprite_pos((int16_t)data->x[0], (int16_t)data->y[0]);
-							break;
-						case OP_SPRITE_CLUT_BITMAP:
-						case OP_SPRITE_BITMAP: {
-							SWAP16(data->x[0]);		SWAP16(data->x[1]);
-							SWAP16(data->y[0]);		SWAP16(data->y[1]);
-
-							SWAP32(data->offset[1]);
-
-							uint8_t* bmp_data;
-							
-							if (zdata == OP_SPRITE_BITMAP)
-								bmp_data = (uint8_t*) ((u32) framebuffer + data->offset[1]);
-							else
-								bmp_data = (uint8_t*) ((u32) ADDR_ADJ + data->offset[1]);
-
-							clear_hw_sprite();
-							
-							sprite_x_offset = (int16_t)data->x[0];
-							sprite_y_offset = (int16_t)data->y[0];
-							sprite_width  = data->x[1];
-							sprite_height = data->y[1];
-
-							if (zdata == OP_SPRITE_BITMAP) {
-								update_hw_sprite(bmp_data, sprite_colors, sprite_width, sprite_height);
-							}
-							else {
-								//printf("Making a %dx%d cursor (%i %i)\n", sprite_width, sprite_height, sprite_x_offset, sprite_y_offset);
-								update_hw_sprite_clut(bmp_data, data->clut1, sprite_width, sprite_height, data->u8offset);
-							}
-							update_hw_sprite_pos(sprite_x_base, sprite_y_base);
-							break;
-						}
-						case OP_SPRITE_COLOR: {
-							sprite_colors[data->u8offset] = data->rgb[0];
-							if (sprite_colors[data->u8offset] == 0xff00ff) sprite_colors[data->u8offset] = 0xfe00fe;
-							break;
-						}
-
-						case OP_PAN:
-							SWAP32(data->offset[0]);
-
-							framebuffer_pan_offset = data->offset[0];
-							if (framebuffer_pan_offset != framebuffer_pan_offset_old) {
-								// VDMA will be reinitialized on the next vertical blank
-								request_video_align = 1;
-								framebuffer_pan_offset_old = framebuffer_pan_offset;
-							}
-							break;
-
-						default:
-							break;
-					}
+					handle_blitter_dma_op(zdata);
 					break;
 				}
 
@@ -1971,6 +1535,10 @@ int main() {
 					invert_rect(rect_x1, rect_y1, rect_x2, rect_y2,
 							zdata & 0xFF, blitter_colormode);
 					break;
+				
+				case REG_ZZ_SET_SPLIT_POS:
+					video_formatter_write(zdata, MNTVF_OP_SPLIT_POS);
+					break;
 
 				// Ethernet
 				case REG_ZZ_ETH_TX:
@@ -2046,9 +1614,8 @@ int main() {
 					break;
 				}
 				case REG_ZZ_DEBUG: {
-					//debug_lowlevel = zdata;
-					debug_dma_op[zdata] = !debug_dma_op[zdata];
-					printf("Debug for DMA RTG op %ld %s.\n", zdata, (debug_dma_op[zdata]) ? "Enabled" : "Disabled");
+					debug_lowlevel = zdata;
+
 					break;
 				}
 
