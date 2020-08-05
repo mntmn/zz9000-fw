@@ -431,7 +431,7 @@ int ethernet_get_backlog() {
 	return frames_backlog;
 }
 
-void ethernet_receive_frame() {
+int ethernet_receive_frame() {
 	// TODO disable interrupts while here
 
 	uint8_t* frm = ethernet_current_receive_ptr();
@@ -447,8 +447,10 @@ void ethernet_receive_frame() {
 			//printf("EMAC: caught up with backlog\n");
 		}
 	} else {
-		printf("EMAC: ethernet_receive_frame() called but backlog is empty\n");
+		// this is NOT an error, Amiga wants data and there is no data on RX buffers
+//		printf("EMAC: ethernet_receive_frame() called but backlog is empty\n");
 	}
+	return(frames_received_from_backlog);
 }
 
 u32 get_frames_received() {

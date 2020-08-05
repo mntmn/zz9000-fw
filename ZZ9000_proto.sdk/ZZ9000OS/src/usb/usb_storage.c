@@ -44,6 +44,8 @@
 #undef BBB_COMDAT_TRACE
 #undef BBB_XPORT_TRACE
 
+void mdelay(int ms);
+
 #include "scsi.h"
 /* direction table -- this indicates the direction of the data
  * transfer for each command code -- a 1 indicates input

@@ -36,6 +36,9 @@
 
 #include "usb.h"
 
+unsigned long get_timer(unsigned long i);
+void mdelay(int ms);
+
 #define max(x, y) ({				\
 	typeof(x) _max1 = (x);			\
 	typeof(y) _max2 = (y);			\
@@ -400,7 +403,7 @@ static int usb_scan_port(struct usb_device_scan *usb_scan)
 
 	portstatus = le16_to_cpu(portsts->wPortStatus);
 	portchange = le16_to_cpu(portsts->wPortChange);
-	printf("[usb-hub] Port %d Status %X Change %X\n", i + 1, portstatus, portchange);
+//	printf("[usb-hub] Port %d Status %X Change %X\n", i + 1, portstatus, portchange);
 
 	/*
 	 * No connection change happened, wait a bit more.

@@ -21,26 +21,29 @@ typedef struct Vec2 {
 	float y;
 } Vec2;
 
+typedef struct {
+	int32_t	a[5];
+	int32_t	b[5];
+	int32_t	c[5];
+} TriangleDef;
+
+typedef struct {
+	int32_t a[2];
+} vec2_i32;
+
 void set_fb(uint32_t* fb_, uint32_t pitch);
 void update_hw_sprite(uint8_t *data, uint32_t *colors, uint16_t w, uint16_t h);
+void update_hw_sprite_clut(uint8_t *data_, uint8_t *colors, uint16_t w, uint16_t h, uint8_t keycolor);
+void update_hw_sprite_pos(int16_t x, int16_t y);
 void clip_hw_sprite(int16_t offset_x, int16_t offset_y);
 void clear_hw_sprite();
-void horizline(uint16_t x1, uint16_t x2, uint16_t y, uint32_t color);
 
 void fill_rect(uint16_t rect_x1, uint16_t rect_y1, uint16_t w, uint16_t h, uint32_t rect_rgb, uint32_t color_format, uint8_t mask);
 void fill_rect_solid(uint16_t rect_x1, uint16_t rect_y1, uint16_t w, uint16_t h, uint32_t rect_rgb, uint32_t color_format);
-void fill_rect8(uint16_t rect_x1, uint16_t rect_y1, uint16_t rect_x2, uint16_t rect_y2, uint8_t rect_rgb);
-void fill_rect16(uint16_t rect_x1, uint16_t rect_y1, uint16_t rect_x2, uint16_t rect_y2, uint16_t rect_rgb);
-void fill_rect32(uint16_t rect_x1, uint16_t rect_y1, uint16_t rect_x2, uint16_t rect_y2, uint32_t rect_rgb);
 
 void copy_rect(uint16_t rect_x1, uint16_t rect_y1, uint16_t w, uint16_t h, uint16_t rect_sx, uint16_t rect_sy, uint32_t color_format, uint32_t* sp_src, uint32_t src_pitch, uint8_t mask);
 void copy_rect_nomask(uint16_t rect_x1, uint16_t rect_y1, uint16_t w, uint16_t h, uint16_t rect_sx, uint16_t rect_sy, uint32_t color_format, uint32_t* sp_src, uint32_t src_pitch, uint8_t draw_mode);
-void copy_rect8(uint16_t rect_x1, uint16_t rect_y1, uint16_t rect_x2, uint16_t rect_y2, uint16_t rect_sx, uint16_t rect_sy);
-void copy_rect16(uint16_t rect_x1, uint16_t rect_y1, uint16_t rect_x2, uint16_t rect_y2, uint16_t rect_sx, uint16_t rect_sy);
-void copy_rect32(uint16_t rect_x1, uint16_t rect_y1, uint16_t rect_x2, uint16_t rect_y2, uint16_t rect_sx, uint16_t rect_sy);
 
-void fill_template(uint32_t bpp, uint16_t rect_x1, uint16_t rect_y1, uint16_t rect_x2, uint16_t rect_y2,
-		uint8_t draw_mode, uint8_t mask, uint32_t fg_color, uint32_t bg_color, uint16_t x_offset, uint16_t y_offset, uint8_t* tmpl_data, uint16_t templ_pitch, uint16_t loop_rows);
 void template_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y1, uint16_t w, uint16_t h,
 	uint8_t draw_mode, uint8_t mask, uint32_t fg_color, uint32_t bg_color,
 	uint16_t x_offset, uint16_t y_offset,
@@ -53,15 +56,41 @@ void pattern_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y1
 void draw_line(int16_t rect_x1, int16_t rect_y1, int16_t rect_x2, int16_t rect_y2, uint16_t len, uint16_t pattern, uint16_t pattern_offset, uint32_t fg_color, uint32_t bg_color, uint32_t color_format, uint8_t mask, uint8_t draw_mode);
 void draw_line_solid(int16_t rect_x1, int16_t rect_y1, int16_t rect_x2, int16_t rect_y2, uint16_t len, uint32_t fg_color, uint32_t color_format);
 
-void p2c_rect(int16_t sx, int16_t sy, int16_t dx, int16_t dy, int16_t w, int16_t h, uint16_t sh, uint8_t draw_mode, uint8_t planes, uint8_t mask, uint8_t layer_mask, uint16_t src_line_pitch, uint8_t *bmp_data_src);
-void p2d_rect(int16_t sx, int16_t sy, int16_t dx, int16_t dy, int16_t w, int16_t h, uint16_t sh, uint8_t draw_mode, uint8_t planes, uint8_t mask, uint8_t layer_mask, uint32_t color_mask, uint16_t src_line_pitch, uint8_t *bmp_data_src, uint32_t color_format);
+void p2c_rect(int16_t sx, int16_t sy, int16_t dx, int16_t dy, int16_t w, int16_t h, uint8_t draw_mode, uint8_t planes, uint8_t mask, uint8_t layer_mask, uint16_t src_line_pitch, uint8_t *bmp_data_src);
+void p2d_rect(int16_t sx, int16_t sy, int16_t dx, int16_t dy, int16_t w, int16_t h, uint8_t draw_mode, uint8_t planes, uint8_t mask, uint8_t layer_mask, uint32_t color_mask, uint16_t src_line_pitch, uint8_t *bmp_data_src, uint32_t color_format);
 void invert_rect(uint16_t rect_x1, uint16_t rect_y1, uint16_t w, uint16_t h, uint8_t mask, uint32_t color_format);
 
-#define MNTVA_COLOR_8BIT     0
+void acc_clear_buffer(uint32_t addr, uint16_t w, uint16_t h, uint16_t pitch_, uint32_t fg_color, uint32_t color_format);
+void acc_flip_to_fb(uint32_t src, uint32_t dest, uint16_t w, uint16_t h, uint16_t pitch_, uint32_t color_format);
+void acc_blit_rect(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch, uint8_t draw_mode, uint8_t mask_color);
+void acc_blit_rect_16to8(uint32_t src, uint32_t dest, uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t src_pitch, uint16_t dest_pitch);
+
+void acc_draw_line(uint32_t dest, uint16_t pitch, int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint32_t color, uint8_t bpp, uint8_t pen_width, uint8_t pen_height);
+void acc_fill_rect(uint32_t dest, uint16_t pitch, int16_t x, int16_t y, int16_t w, int16_t h, uint32_t fg_color, uint8_t bpp);
+void acc_draw_circle(uint32_t dest, uint16_t pitch, int16_t x, int16_t y, int16_t r, int16_t w, int16_t h, uint32_t fg_color, uint8_t bpp);
+void acc_fill_circle(uint32_t dest, uint16_t pitch, int16_t x0, int16_t y0, int16_t r, int16_t w, int16_t h, uint32_t fg_color, uint8_t bpp);
+
+void acc_fill_flat_tri(uint32_t dest, TriangleDef *d, uint16_t w, uint16_t h, uint32_t fg_color, uint8_t bpp);
+
+void *get_color_conversion_table(int index);
+
+/*#define MNTVA_COLOR_8BIT     0
 #define MNTVA_COLOR_16BIT565 1
 #define MNTVA_COLOR_32BIT    2
 #define MNTVA_COLOR_1BIT     3
-#define MNTVA_COLOR_15BIT    4
+#define MNTVA_COLOR_15BIT    4*/
+
+enum color_formats {
+	MNTVA_COLOR_8BIT,
+	MNTVA_COLOR_16BIT565,
+	MNTVA_COLOR_32BIT,
+	MNTVA_COLOR_1BIT,
+	MNTVA_COLOR_15BIT,
+	MNTVA_COLOR_NUM,
+};
+
+#define SWAP16(a) a = __builtin_bswap16(a)
+#define SWAP32(a) a = __builtin_bswap32(a)
 
 // see http://amigadev.elowar.com/read/ADCD_2.1/Libraries_Manual_guide/node0351.html
 #define JAM1	    0	      /* jam 1 color into raster */
@@ -490,3 +519,68 @@ enum gfx_minterm_modes {
 					d[x] |= (s & color_mask); break; \
 			} break; \
 	}
+
+#pragma pack(4)
+struct GFXData {
+  uint32_t offset[2];
+  uint32_t rgb[2];
+  uint16_t x[4], y[4];
+  uint16_t user[4];
+  uint16_t pitch[4];
+  uint8_t u8_user[8];
+  uint8_t op, mask, minterm, u8offset;
+  uint32_t u32_user[8];
+  uint8_t clut1[768];
+  uint8_t clut2[768];
+  uint8_t clut3[768];
+  uint8_t clut4[768];
+};
+
+enum gfx_dma_op {
+  OP_NONE,
+  OP_DRAWLINE,
+  OP_FILLRECT,
+  OP_COPYRECT,
+  OP_COPYRECT_NOMASK,
+  OP_RECT_TEMPLATE,
+  OP_RECT_PATTERN,
+  OP_P2C,
+  OP_P2D,
+  OP_INVERTRECT,
+  OP_PAN,
+  OP_SPRITE_XY,
+  OP_SPRITE_COLOR,
+  OP_SPRITE_BITMAP,
+  OP_SPRITE_CLUT_BITMAP,
+  OP_ETH_USB_OFFSETS,
+  OP_NUM,
+};
+
+enum gfx_acc_op {
+  ACC_OP_NONE,
+  ACC_OP_BUFFER_FLIP,
+  ACC_OP_BUFFER_CLEAR,
+  ACC_OP_BLIT_RECT,
+  ACC_OP_ALLOC_SURFACE,
+  ACC_OP_FREE_SURFACE,
+  ACC_OP_SET_BPP_CONVERSION_TABLE,
+  ACC_OP_DRAW_LINE,
+  ACC_OP_FILL_RECT,
+  ACC_OP_DRAW_CIRCLE,
+  ACC_OP_FILL_CIRCLE,
+  ACC_OP_DRAW_FLAT_TRI,
+  ACC_OP_DRAW_TEX_TRI,
+  ACC_OP_NUM,
+};
+
+enum gfxdata_offsets {
+  GFXDATA_DST,
+  GFXDATA_SRC,
+};
+
+enum gfxdata_u8_types {
+  GFXDATA_U8_COLORMODE,
+  GFXDATA_U8_DRAWMODE,
+  GFXDATA_U8_LINE_PATTERN_OFFSET,
+  GFXDATA_U8_LINE_PADDING,
+};
