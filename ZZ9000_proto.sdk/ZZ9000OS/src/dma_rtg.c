@@ -8,7 +8,7 @@ extern u32 framebuffer_pan_offset;
 extern u32 framebuffer_pan_offset_old;
 extern u32 request_video_align;
 
-extern uint32_t *sprite_colors;
+extern uint32_t sprite_colors[4];
 
 extern int16_t sprite_x, sprite_x_adj, sprite_x_base;
 extern int16_t sprite_y, sprite_y_adj, sprite_y_base;
