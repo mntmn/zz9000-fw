@@ -83,6 +83,16 @@ float xadc_get_temperature() {
 	return XAdcPs_RawToTemperature(raw);
 }
 
+float xadc_get_aux_voltage() {
+	u16 raw = XAdcPs_GetAdcData(&Xadc, XADCPS_CH_VCCAUX);
+	return XAdcPs_RawToVoltage(raw);
+}
+
+float xadc_get_int_voltage() {
+	u16 raw = XAdcPs_GetAdcData(&Xadc, XADCPS_CH_VCCINT);
+	return XAdcPs_RawToVoltage(raw);
+}
+
 // TODO: document what this does
 unsigned int cur_mem_offset = 0x3400000;
 
@@ -2224,6 +2234,14 @@ int main() {
 					}
 					case REG_ZZ_TEMPERATURE: {
 						data = ((int16_t)(xadc_get_temperature()*10.0)) << 16;
+						break;
+					}
+					case REG_ZZ_VOLTAGE_AUX: {
+						data = ((int16_t)(xadc_get_aux_voltage()*10.0)) << 16;
+						break;
+					}
+					case REG_ZZ_VOLTAGE_INT: {
+						data = ((int16_t)(xadc_get_int_voltage()*10.0)) << 16;
 						break;
 					}
 				}
