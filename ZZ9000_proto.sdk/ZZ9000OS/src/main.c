@@ -2234,11 +2234,11 @@ int main() {
 					}
 					case REG_ZZ_TEMPERATURE: {
 						// includes REG_ZZ_VOLTAGE_AUX in lower 16 bits
-						data = (((uint32_t)(xadc_get_temperature()*10.0)) << 16) | ((uint32_t)(xadc_get_aux_voltage()*10.0));
+						data = (((uint32_t)(xadc_get_temperature()*10.0)) << 16) | ((uint32_t)(xadc_get_aux_voltage()*100.0));
 						break;
 					}
 					case REG_ZZ_VOLTAGE_INT: {
-						data = ((int16_t)(xadc_get_int_voltage()*10.0)) << 16;
+						data = ((int16_t)(xadc_get_int_voltage()*100.0)) << 16;
 						break;
 					}
 				}
