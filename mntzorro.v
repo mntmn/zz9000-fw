@@ -23,13 +23,19 @@
 `define ZORRO3
 
 // use together with ZORRO2:
-//`define VARIANT_ZZ9500
+//`define VARIANT_ZZ9500        // uses Denise adapter/A500 specific video capture
+//`define VARIANT_2MB           // uses only 2MB address space
+//`define VARIANT_SUPERDENISE   // for A500+ and super denise
 
 //`define VARIANT_FW20
 
 `define C_S_AXI_DATA_WIDTH 32
 `define C_S_AXI_ADDR_WIDTH 5
+`ifdef VARIANT_2MB
+`define RAM_SIZE 32'h200000 // 2MB for Zorro 2
+`else
 `define RAM_SIZE 32'h400000 // 4MB for Zorro 2
+`endif
 `define REG_SIZE 32'h01000
 `define AUTOCONF_LOW  24'he80000
 `define AUTOCONF_HIGH 24'he80080
@@ -994,6 +1000,8 @@ module MNTZorro_v0_1_S00_AXI
                
 `ifdef ZORRO3
                .CLKOUT0_PHASE(0.000000),
+`elsif VARIANT_SUPERDENISE
+               .CLKOUT0_PHASE(0.000000),
 `elsif VARIANT_ZZ9500
                .CLKOUT0_PHASE(90.000000),
 `else
@@ -1005,6 +1013,8 @@ module MNTZorro_v0_1_S00_AXI
                .CLKOUT1_DUTY_CYCLE(0.500000),
                
 `ifdef ZORRO3
+               .CLKOUT1_PHASE(0.000000),
+`elsif VARIANT_SUPERDENISE
                .CLKOUT1_PHASE(0.000000),
 `elsif VARIANT_ZZ9500
                .CLKOUT1_PHASE(270.000000),
@@ -1576,8 +1586,11 @@ module MNTZorro_v0_1_S00_AXI
               
               case (z2_mapped_addr[7:0])
                 8'h00: data_out <= 'b1101_1111_1111_1111; // zorro 2 (11), no pool (0) rom (1)
-                8'h02: data_out <= 'b0111_1111_1111_1111; // next board unrelated (0), 4mb (110 for 2mb)
-                
+`ifdef VARIANT_2MB
+                8'h02: data_out <= 'b0110_1111_1111_1111; // next board unrelated (0), 2mb (110)
+`else
+                8'h02: data_out <= 'b0111_1111_1111_1111; // next board unrelated (0), 4mb (111)
+`endif
                 8'h04: data_out <= 'b1111_1111_1111_1111; // product number
                 8'h06: data_out <= 'b1100_1111_1111_1111; // (3)
                 
