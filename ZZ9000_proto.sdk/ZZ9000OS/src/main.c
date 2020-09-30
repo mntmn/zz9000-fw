@@ -655,9 +655,9 @@ void video_mode_init(int mode, int scalemode, int colormode) {
 	if (scalemode & 2)
 		vdiv = 2;
 
-	if (colormode == 0)
+	if (colormode == MNTVA_COLOR_8BIT)
 		hdiv *= 4;
-	if (colormode == 1)
+	if (colormode == MNTVA_COLOR_16BIT565 || colormode == MNTVA_COLOR_15BIT)
 		hdiv *= 2;
 
 	struct zz_video_mode *vmode = &preset_video_modes[mode];

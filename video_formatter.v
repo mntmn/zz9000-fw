@@ -58,7 +58,8 @@ localparam OP_VIDEOCAP=16; // we ignore this here, it's snooped by MNTZorro
 localparam CMODE_8BIT=0;
 localparam CMODE_16BIT=1;
 localparam CMODE_32BIT=2;
-localparam CMODE_15BIT=4;
+localparam CMODE_15BIT=3;
+localparam CMODE_1BIT=4;
 
 reg [11:0] screen_width; // = 720;
 reg [11:0] screen_height; // = 576;
@@ -370,8 +371,8 @@ always @(posedge dvi_clk) begin
     4'b1001: counter_scanout_step <= 3;
     4'b0010: counter_scanout_step <= 0; // 32 bit
     4'b1010: counter_scanout_step <= 1;
-    //4'b0100: counter_scanout_step <= 1; // 15 bit
-    //4'b1100: counter_scanout_step <= 3;
+    4'b0011: counter_scanout_step <= 1; // 15 bit
+    4'b1011: counter_scanout_step <= 3;
   endcase
   
   if (counter_x>vga_h_rez) begin
@@ -390,9 +391,9 @@ always @(posedge dvi_clk) begin
   if (vga_colormode==CMODE_16BIT)
     // 16 bit 5r6g5b
     pixout32_dly <= {8'b0,blue16,green16,red16};
-  //else if (vga_colormode==CMODE_15BIT)
-  //  // 15 bit 5r5g5b for shapeshifter
-  //  pixout32_dly <= {8'b0,blue15,green15,red15};
+  else if (vga_colormode==CMODE_15BIT)
+    // 15 bit 5r5g5b for shapeshifter
+    pixout32_dly <= {8'b0,blue15,green15,red15};
   else
     pixout32_dly <= pixout32;
   pixout32_dly2 <= pixout32_dly;
