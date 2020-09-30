@@ -1585,7 +1585,7 @@ module MNTZorro_v0_1_S00_AXI
               slaven <= 1;
               
               case (z2_mapped_addr[7:0])
-                8'h00: data_out <= 'b1101_1111_1111_1111; // zorro 2 (11), no pool (0) rom (1)
+                8'h00: data_out <= 'b1100_1111_1111_1111; // zorro 2 (11), no pool (0) autoboot rom (0)
 `ifdef VARIANT_2MB
                 8'h02: data_out <= 'b0110_1111_1111_1111; // next board unrelated (0), 2mb (110)
 `else
@@ -1594,30 +1594,21 @@ module MNTZorro_v0_1_S00_AXI
                 8'h04: data_out <= 'b1111_1111_1111_1111; // product number
                 8'h06: data_out <= 'b1100_1111_1111_1111; // (3)
                 
-                8'h08: data_out <= 'b0011_1111_1111_1111; // flags inverted 0011
-                8'h0a: data_out <= 'b1110_1111_1111_1111; // inverted 0001 = OS sized
+                8'h08: data_out <= 'b1111_1111_1111_1111; // flags inverted 0000
+                8'h0a: data_out <= 'b1111_1111_1111_1111; // inverted 0000 = log=phys
                 
                 8'h10: data_out <= 'b1001_1111_1111_1111; // manufacturer high byte inverted (02)
                 8'h12: data_out <= 'b0010_1111_1111_1111; // 
                 8'h14: data_out <= 'b1001_1111_1111_1111; // manufacturer low byte (9a)
                 8'h16: data_out <= 'b0001_1111_1111_1111;
                 
-                8'h18: data_out <= 'b1111_1111_1111_1111; // serial 01 01 01 01
-                8'h1a: data_out <= 'b1110_1111_1111_1111; //
-                8'h1c: data_out <= 'b1111_1111_1111_1111; //
-                8'h1e: data_out <= 'b1110_1111_1111_1111; //
-                8'h20: data_out <= 'b1111_1111_1111_1111; //
-                8'h22: data_out <= 'b1110_1111_1111_1111; //
-                8'h24: data_out <= 'b1111_1111_1111_1111; //
-                8'h26: data_out <= 'b1110_1111_1111_1111; //
-                
                 /*8'h28: data_out <= 'b1111_1111_1111_1111; // autoboot rom vector (er_InitDiagVec)
                  8'h2a: data_out <= 'b1111_1111_1111_1111; // ff7f = ~0080
                  8'h2c: data_out <= 'b0111_1111_1111_1111;
                  8'h2e: data_out <= 'b1111_1111_1111_1111;*/
                 
-                //'h000040: data <= 'b0000_0000_0000_0000; // interrupts (not inverted)
-                //'h000042: data <= 'b0000_0000_0000_0000; //
+                8'h40: data_out <= 'b0000_0000_0000_0000; // interrupts (not inverted)
+                8'h42: data_out <= 'b0000_0000_0000_0000; //
                 
                 default: data_out <= 'b1111_1111_1111_1111;
               endcase
