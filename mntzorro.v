@@ -917,10 +917,13 @@ module MNTZorro_v0_1_S00_AXI
   (* mark_debug = "true" *) reg [7:0] zorro_state = COLD;
   reg zorro_idle;
   reg [7:0] read_counter; // used by Z3
+`ifdef ZORRO2
+  // experimentally found for TF536
+  reg [5:0] dtack_timeout = 'h02; // number of cycles before we turn off our dtack signal
+`else
   reg [5:0] dtack_timeout = 6; // number of cycles before we turn off our dtack signal
+`endif
   reg [7:0] dataout_time = 'h02;
-  reg [7:0] datain_time = 'h10;
-  reg [7:0] datain_counter = 0;
   reg [23:0] last_addr;
   reg [23:0] last_read_addr;
   reg [15:0] last_data;
@@ -1685,7 +1688,6 @@ module MNTZorro_v0_1_S00_AXI
               last_addr <= z2_mapped_addr-ram_low;
               dataout_enable <= 0;
               dataout <= 0;
-              datain_counter <= 0;
               slaven <= 1;
               z_ovr <= 1;
               //count_writes <= count_writes + 1;
@@ -1732,10 +1734,10 @@ module MNTZorro_v0_1_S00_AXI
           end
         end
         WAIT_READ2C: begin
-          //if (read_counter>7) // FIXME tune this
+          if (read_counter>dataout_time) // FIXME tune this
             zorro_state <= WAIT_READ2D;
             
-          //read_counter <= read_counter + 1'b1;
+          read_counter <= read_counter + 1'b1;
         end
         WAIT_READ2D: begin
           read_counter <= 0;
@@ -1794,7 +1796,7 @@ module MNTZorro_v0_1_S00_AXI
           
           // FIXME
           read_counter <= read_counter + 1'b1;
-          if (read_counter >= 10) begin
+          if (read_counter >= dtack_timeout) begin
             dtack <= 0;
           end
           
@@ -2108,7 +2110,8 @@ module MNTZorro_v0_1_S00_AXI
             'h02: video_control_data_zorro[15:0]  <= regdata_in[15:0];
             'h04: video_control_op_zorro[7:0]     <= regdata_in[7:0]; // FIXME
             'h06: videocap_mode_in <= regdata_in[0];
-            //'h20: if (regdata_in[5:0]>0) dtack_timeout <= regdata_in[5:0];
+            'h10: dataout_time[7:0]     <= regdata_in[7:0];
+            'h20: dtack_timeout <= regdata_in[5:0];
             //'h14: zorro_interrupt <= regdata_in[0];
             //'h10: E7M_PSINCDEC <= regdata_in[0];
             //'h12: E7M_PSEN     <= regdata_in[0];
