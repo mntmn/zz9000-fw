@@ -19,15 +19,15 @@
  */
 
 // ZORRO2/3 switch
-//`define ZORRO2
-`define ZORRO3
+`define ZORRO2 1
+//`define ZORRO3 1
 
 // use together with ZORRO2:
-//`define VARIANT_ZZ9500        // uses Denise adapter/A500 specific video capture
-//`define VARIANT_2MB           // uses only 2MB address space
-//`define VARIANT_SUPERDENISE   // for A500+ and super denise
+`define VARIANT_ZZ9500   1     // uses Denise adapter/A500 specific video capture
+//`define VARIANT_2MB     1      // uses only 2MB address space
+`define VARIANT_SUPERDENISE   1// for A500+ and super denise
 
-//`define VARIANT_FW20
+//`define VARIANT_FW20 1
 
 `define C_S_AXI_DATA_WIDTH 32
 `define C_S_AXI_ADDR_WIDTH 5
@@ -194,7 +194,7 @@ module MNTZorro_v0_1_S00_AXI
    output reg [31:0] video_control_data_out,
    output reg [7:0]  video_control_op_out,
    output reg video_control_interlace_out,
-   input wire video_control_vblank_in,
+   input wire [1:0] video_control_vblank_in,
   
    // Xilinx AXI4-Lite implementation starts here ==============================
    
@@ -749,7 +749,11 @@ module MNTZorro_v0_1_S00_AXI
   
   reg [7:0] video_debug_reg;
   
+`ifdef VARIANT_FW20
   assign arm_interrupt = zorro_ram_write_request | zorro_ram_read_request;
+`else
+  assign arm_interrupt = video_control_vblank_in[0] | video_control_vblank_in[1];
+`endif
 
   // -- synchronizers ------------------------------------------
   always @(posedge S_AXI_ACLK) begin
@@ -2087,8 +2091,7 @@ module MNTZorro_v0_1_S00_AXI
              rr_data <= video_control_op; 
             end*/
             'h00: begin
-              // this flag is read by Amiga software to check if all writes are done
-              rr_data <= video_control_vblank << 16; //zorro_ram_write_request;
+              rr_data <= video_control_vblank << 16;
             end
             default: begin
               rr_data[31:16] <= REVISION;
@@ -2161,7 +2164,7 @@ module MNTZorro_v0_1_S00_AXI
     
     video_control_data_out <= video_control_data;
     video_control_op_out   <= video_control_op;
-    video_control_vblank   <= video_control_vblank_in;
+    video_control_vblank   <= video_control_vblank_in[0];
     video_control_interlace_out <= video_control_interlace;
     
     // snoop the screen width for correct capture pitch

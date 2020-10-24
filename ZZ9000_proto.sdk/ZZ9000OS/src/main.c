@@ -22,6 +22,7 @@
 #include "xil_printf.h"
 #include "xparameters.h"
 #include "xil_io.h"
+#include "xscugic.h"
 
 #include "xiicps.h"
 #include "sleep.h"
@@ -417,9 +418,9 @@ void pixelclock_init(int mhz) {
 	// Max multiplier is 64
 	// Max div is 56
 	// Max otherdiv is 128
-	
+
 	switch (mhz) {
-		case 50: 
+		case 50:
 			mul = 15;
 			div = 1;
 			otherdiv = 30;
@@ -564,6 +565,7 @@ void video_formatter_valign() {
 #define MNTVF_OP_SCALE 4
 #define MNTVF_OP_DIMENSIONS 2
 #define MNTVF_OP_COLORMODE 1
+#define MNTVF_OP_REPORT_LINE 17
 
 void video_formatter_write(uint32_t data, uint16_t op) {
 	mntzorro_write(MNTZ_BASE_ADDR, MNTZORRO_REG3, data);
@@ -776,6 +778,10 @@ void update_hw_sprite_pos(int16_t x, int16_t y) {
 	video_formatter_write((sprite_y_adj << 16) | sprite_x_adj, MNTVF_OP_SPRITE_XY);
 }
 
+void set_y_interrupt_position(u32 y) {
+	video_formatter_write(y, MNTVF_OP_REPORT_LINE);
+}
+
 // this mode can be changed by amiga software to select a different resolution / framerate for
 // native video capture
 //static int videocap_video_mode = ZZVMODE_720x576;
@@ -813,6 +819,72 @@ void reset_default_videocap_pan() {
 	}
 }
 
+#define INTC_INTERRUPT_ID_0 61 // IRQ_F2P[0:0]
+#define INTC_INTERRUPT_ID_1 62 // IRQ_F2P[1:1]
+static XScuGic intc;
+// interrupt service routine for IRQ_F2P[0:0]
+void isr0 (void *intc_inst_ptr) {
+	// TODO: setup split
+	// TODO: check if we are at vblank or at report_y line (by checking vblank value?)
+
+	u32 zstate = mntzorro_read(MNTZ_BASE_ADDR, MNTZORRO_REG3);
+	int vblank = (zstate & (1<<21));
+
+	if (vblank) {
+		framebuffer_pan_offset = 0;
+		//printf("V\n");
+	} else {
+		// at split: capture area
+		framebuffer_pan_offset = 0xe00000;
+		//printf(".\n");
+	}
+
+	struct zz_video_mode *mode = &preset_video_modes[videocap_video_mode];
+	init_vdma(mode->hres, mode->vres, 1, 2);
+}
+
+int fpga_interrupt_init() {
+  int result;
+  XScuGic *intc_instance_ptr = &intc;
+  XScuGic_Config *intc_config;
+
+  // get config for interrupt controller
+  intc_config = XScuGic_LookupConfig(XPAR_PS7_SCUGIC_0_DEVICE_ID);
+  if (NULL == intc_config) {
+    return XST_FAILURE;
+  }
+
+  printf("XScuGic_CfgInitialize()\n");
+
+  // initialize the interrupt controller driver
+  result = XScuGic_CfgInitialize(intc_instance_ptr, intc_config, intc_config->CpuBaseAddress);
+
+  if (result != XST_SUCCESS) {
+    return result;
+  }
+
+  printf("XScuGic_SetPriorityTriggerType()\n");
+
+  // set the priority of IRQ_F2P[0:0] to 0xA0 (highest 0xF8, lowest 0x00) and a trigger for a rising edge 0x3.
+  XScuGic_SetPriorityTriggerType(intc_instance_ptr, INTC_INTERRUPT_ID_0, 0xA0, 0x3);
+
+  printf("XScuGic_Connect()\n");
+
+  // connect the interrupt service routine isr0 to the interrupt controller
+  result = XScuGic_Connect(intc_instance_ptr, INTC_INTERRUPT_ID_0, (Xil_ExceptionHandler)isr0, (void *)&intc);
+
+  if (result != XST_SUCCESS) {
+    return result;
+  }
+
+  printf("XScuGic_Enable()\n");
+
+  // enable interrupts for IRQ_F2P[0:0]
+  XScuGic_Enable(intc_instance_ptr, INTC_INTERRUPT_ID_0);
+
+  return 0;
+}
+
 void handle_amiga_reset() {
 	reset_default_videocap_pan();
 
@@ -834,6 +906,7 @@ void handle_amiga_reset() {
 
 	sprite_reset();
 	ethernet_init();
+	fpga_interrupt_init();
 
 	usb_storage_available = zz_usb_init();
 
@@ -1090,6 +1163,7 @@ int main() {
 	int colormode = 0;
 	uint32_t framebuffer_pan_offset_old = framebuffer_pan_offset;
 	video_mode = 0x2200;
+	int vblank = 0;
 
 	int backlog_nag_counter = 0;
 	int interrupt_enabled = 0;
@@ -1097,7 +1171,6 @@ int main() {
 	int request_video_align=0;
 //	int old_vblank = 0;
 //	XTime time1 = 0, time2 = 0;
-	int vblank=0;
 	int frfb=0;
 
 	int custom_video_mode = ZZVMODE_CUSTOM;
@@ -1231,6 +1304,10 @@ int main() {
 
 					videocap_video_mode = zdata &0xff;
 					break;
+				case REG_ZZ_UNUSED_REGCC:
+					printf("y interrupt position: %lx\n", zdata);
+					set_y_interrupt_position(zdata);
+					break;
 				case REG_ZZ_SPRITE_X:
 				case REG_ZZ_SPRITE_Y:
 					if (!sprite_enabled)
@@ -1284,7 +1361,7 @@ int main() {
 							+ blitter_src_offset);
 
 					clear_hw_sprite();
-					
+
 					sprite_x_offset = rect_x1;
 					sprite_y_offset = rect_y1;
 					sprite_width  = rect_x2;
@@ -1420,7 +1497,7 @@ int main() {
 							SWAP16(data->x[0]); SWAP16(data->y[0]);
 							SWAP16(data->x[1]); SWAP16(data->y[1]);
 							SWAP16(data->x[2]); SWAP16(data->y[2]);
-							
+
 							SWAP32(data->offset[0]);
 							SWAP16(data->pitch[0]);
 							data->offset[0] += ADDR_ADJ;
@@ -1569,9 +1646,9 @@ int main() {
 								draw_line(data->x[0], data->y[0], data->x[1], data->y[1],
 										data->user[0], data->user[1], data->user[2], data->rgb[0], data->rgb[1],
 										data->u8_user[GFXDATA_U8_COLORMODE], data->mask, data->u8_user[GFXDATA_U8_DRAWMODE]);
-							
+
 							break;
-						
+
 						case OP_FILLRECT:
 							SWAP16(data->x[0]);		SWAP16(data->x[1]);
 							SWAP16(data->y[0]);		SWAP16(data->y[1]);
@@ -1608,7 +1685,7 @@ int main() {
 													data->y[2], data->u8_user[GFXDATA_U8_COLORMODE],
 													(uint32_t*) ((u32) framebuffer + data->offset[0]),
 													data->pitch[0], MINTERM_SRC);
-								else 
+								else
 									copy_rect(data->x[0], data->y[0], data->x[1], data->y[1], data->x[2],
 											data->y[2], data->u8_user[GFXDATA_U8_COLORMODE],
 											(uint32_t*) ((u32) framebuffer + data->offset[0]),
@@ -1671,7 +1748,7 @@ int main() {
 										data->rgb[0], data->rgb[1], data->x[2], data->y[2], tmpl_data,
 										data->pitch[1]);
 							}
-							
+
 							break;
 						}
 
@@ -1739,14 +1816,14 @@ int main() {
 							SWAP32(data->offset[1]);
 
 							uint8_t* bmp_data;
-							
+
 							if (zdata == OP_SPRITE_BITMAP)
 								bmp_data = (uint8_t*) ((u32) framebuffer + data->offset[1]);
 							else
 								bmp_data = (uint8_t*) ((u32) ADDR_ADJ + data->offset[1]);
 
 							clear_hw_sprite();
-							
+
 							sprite_x_offset = (int16_t)data->x[0];
 							sprite_y_offset = (int16_t)data->y[0];
 							sprite_width  = data->x[1];
@@ -1812,7 +1889,7 @@ int main() {
 											(uint32_t*) ((u32) framebuffer
 													+ blitter_dst_offset),
 											blitter_dst_pitch, MINTERM_SRC);
-						else 
+						else
 							copy_rect(rect_x1, rect_y1, rect_x2, rect_y2, rect_x3,
 									rect_y3, blitter_colormode & 0x0F,
 									(uint32_t*) ((u32) framebuffer
@@ -1861,7 +1938,7 @@ int main() {
 								rect_rgb, rect_rgb2, rect_x3, rect_y3, tmpl_data,
 								blitter_src_pitch);
 					}
-					
+
 					break;
 				}
 
