@@ -9,3 +9,6 @@ void Codec47Decoder_Init(int idx, int width, int height);
 void Codec47Decoder_decode(int idx, uint8_t *dst, uint8_t *src);
 int Codec47Decoder_GetCur();
 void Codec47Decoder_Next();
+
+void init_imc_tables();
+uint32_t decompress_adpcm(uint8_t *compInput, uint8_t *compOutput, int channels);

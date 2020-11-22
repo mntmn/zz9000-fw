@@ -1,5 +1,5 @@
 #include "gfx.h"
-#include "compression.h"
+#include "compression/compression.h"
 #include <string.h>
 
 void decompress_rle_smush1_data(uint8_t * src, uint8_t * dst, uint32_t size, uint16_t width, uint16_t height, uint16_t pitch)

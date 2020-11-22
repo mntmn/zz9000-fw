@@ -4,6 +4,7 @@
 #include "xil_printf.h"
 
 extern u32* framebuffer;
+extern u32* bgbuf_offset;
 extern u32 framebuffer_pan_offset;
 extern u32 framebuffer_pan_offset_old;
 extern u32 request_video_align;
@@ -14,6 +15,7 @@ extern int16_t sprite_x, sprite_x_adj, sprite_x_base;
 extern int16_t sprite_y, sprite_y_adj, sprite_y_base;
 extern int16_t sprite_x_offset;
 extern int16_t sprite_y_offset;
+extern uint16_t split_pos, old_split_pos;
 extern uint16_t sprite_enabled;
 extern uint8_t sprite_width;
 extern uint8_t sprite_height;
@@ -256,8 +258,11 @@ void handle_blitter_dma_op(uint16_t zdata)
             SWAP16(data->y[0]);
             SWAP32(data->offset[0]);
             data->offset[0] += ADDR_ADJ;
-            printf("Screen split pos set to scanling %d (%.8X)\n", data->y[0], data->offset[0]);
-            video_formatter_write(data->y[0], MNTVF_OP_SPLIT_POS);
+            bgbuf_offset = (uint32_t *)(data->offset[0] & 0x0FFFFFFF);
+            old_split_pos = split_pos;
+            split_pos = data->y[0];
+            //printf("Screen split pos set to scanline %d (%.8X)\n", data->y[0], data->offset[0]);
+            video_formatter_write(data->y[0], MNTVF_OP_REPORT_LINE);
             break;
 
         default:

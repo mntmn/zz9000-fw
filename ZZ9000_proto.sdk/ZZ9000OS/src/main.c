@@ -22,6 +22,7 @@
 #include "xil_printf.h"
 #include "xparameters.h"
 #include "xil_io.h"
+#include "xscugic.h"
 
 #include "xiicps.h"
 #include "sleep.h"
@@ -90,7 +91,9 @@ float xadc_get_int_voltage() {
 	return XAdcPs_RawToVoltage(raw);
 }
 
-// TODO: document what this does
+// This is the absolute offset in ZZ9000 RAM for the "framebuffer transfer register",
+// which can be replaced by the DMA acceleration functionality entirely, but some
+// software still relies on this legacy register.
 unsigned int cur_mem_offset = 0x3500000;
 
 int hdmi_ctrl_write_byte(u8 addr, u8 value) {
@@ -226,6 +229,9 @@ void hdmi_ctrl_init() {
 
 XAxiVdma vdma;
 u32* framebuffer = 0;
+u32* bgbuf_offset = 0;
+
+uint16_t split_pos = 0, old_split_pos = 0;
 u32 framebuffer_pan_offset = 0;
 u32 framebuffer_pan_offset_old = 0;
 u32 request_video_align = 0;
@@ -240,7 +246,7 @@ extern u32 *fb;
 //extern uint32_t fb_pitch=0;
 
 // 32bit: hdiv=1, 16bit: hdiv=2, 8bit: hdiv=4, ...
-int init_vdma(int hsize, int vsize, int hdiv, int vdiv) {
+int init_vdma(int hsize, int vsize, int hdiv, int vdiv, u32 bufpos) {
 	int status;
 	XAxiVdma_Config *Config;
 
@@ -278,7 +284,7 @@ int init_vdma(int hsize, int vsize, int hdiv, int vdiv) {
 	ReadCfg.EnableFrameCounter = 0; /* Endless transfers */
 	ReadCfg.FixedFrameStoreAddr = 0; /* We are not doing parking */
 
-	ReadCfg.FrameStoreStartAddr[0] = (u32) framebuffer + framebuffer_pan_offset;
+	ReadCfg.FrameStoreStartAddr[0] = bufpos;
 
 	//printf("VDMA Framebuffer at 0x%x\n", ReadCfg.FrameStoreStartAddr[0]);
 
@@ -416,7 +422,7 @@ void pixelclock_init(int mhz) {
 	// Max otherdiv is 128
 	
 	switch (mhz) {
-		case 50: 
+		case 50:
 			mul = 15;
 			div = 1;
 			otherdiv = 30;
@@ -595,7 +601,7 @@ void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
 	hdmi_ctrl_init();
 
 	//printf("init_vdma()...\n");
-	init_vdma(hres, vres, hdiv, vdiv);
+	init_vdma(hres, vres, hdiv, vdiv, (u32)framebuffer + framebuffer_pan_offset);
 	//printf("...done.\n");
 
 	//dump_vdma_status(&vdma);
@@ -617,7 +623,7 @@ void video_system_init_2(struct zz_video_mode *mode, int hdiv, int vdiv) {
 	hdmi_ctrl_init();
 
 	//printf("init_vdma()...\n");
-	init_vdma(mode->hres, mode->vres, hdiv, vdiv);
+	init_vdma(mode->hres, mode->vres, hdiv, vdiv, (u32)framebuffer + framebuffer_pan_offset);
 	//printf("...done.\n");
 
 	//dump_vdma_status(&vdma);
@@ -799,6 +805,73 @@ void reset_default_videocap_pan() {
 	}
 }
 
+#define INTC_INTERRUPT_ID_0 61 // IRQ_F2P[0:0]
+#define INTC_INTERRUPT_ID_1 62 // IRQ_F2P[1:1]
+static XScuGic intc;
+
+// interrupt service routine for IRQ_F2P[0:0]
+void isr0 (void *intc_inst_ptr) {
+	u32 zstate = mntzorro_read(MNTZ_BASE_ADDR, MNTZORRO_REG3);
+
+	int videocap_enabled = (zstate & (1 << 23));
+
+	if (!videocap_enabled) {
+		int vblank = (zstate & (1 << 21));
+		int hblank = (zstate & (1 << 20));
+
+		if (hblank && split_pos != 0) {
+			init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv, (u32)(bgbuf_offset));
+		}
+		if (vblank && (split_pos != 0 || (split_pos == 0 && old_split_pos != 0)))  {
+			init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv, (u32)framebuffer + framebuffer_pan_offset);
+			if (old_split_pos != 0)
+				old_split_pos = 0;
+		}
+	}
+}
+
+int fpga_interrupt_init() {
+  int result;
+  XScuGic *intc_instance_ptr = &intc;
+  XScuGic_Config *intc_config;
+
+  // get config for interrupt controller
+  intc_config = XScuGic_LookupConfig(XPAR_PS7_SCUGIC_0_DEVICE_ID);
+  if (NULL == intc_config) {
+    return XST_FAILURE;
+  }
+
+  printf("XScuGic_CfgInitialize()\n");
+
+  // initialize the interrupt controller driver
+  result = XScuGic_CfgInitialize(intc_instance_ptr, intc_config, intc_config->CpuBaseAddress);
+
+  if (result != XST_SUCCESS) {
+    return result;
+  }
+
+  printf("XScuGic_SetPriorityTriggerType()\n");
+
+  // set the priority of IRQ_F2P[0:0] to 0xA0 (highest 0xF8, lowest 0x00) and a trigger for a rising edge 0x3.
+  XScuGic_SetPriorityTriggerType(intc_instance_ptr, INTC_INTERRUPT_ID_0, 0xA0, 0x3);
+
+  printf("XScuGic_Connect()\n");
+
+  // connect the interrupt service routine isr0 to the interrupt controller
+  result = XScuGic_Connect(intc_instance_ptr, INTC_INTERRUPT_ID_0, (Xil_ExceptionHandler)isr0, (void *)&intc);
+
+  if (result != XST_SUCCESS) {
+    return result;
+  }
+
+  printf("XScuGic_Enable()\n");
+
+  // enable interrupts for IRQ_F2P[0:0]
+  XScuGic_Enable(intc_instance_ptr, INTC_INTERRUPT_ID_0);
+
+  return 0;
+}
+
 void handle_amiga_reset() {
 	reset_default_videocap_pan();
 
@@ -820,6 +893,7 @@ void handle_amiga_reset() {
 
 	sprite_reset();
 	ethernet_init();
+	fpga_interrupt_init();
 
 	usb_storage_available = zz_usb_init();
 
@@ -1085,10 +1159,8 @@ int main() {
 	int interrupt_enabled = 0;
 
 	request_video_align = 0;
-//	int old_vblank = 0;
-//	XTime time1 = 0, time2 = 0;
-	int vblank=0;
-	int frfb=0;
+	int vblank = 0;
+	int frfb = 0;
 
 	int custom_video_mode = ZZVMODE_CUSTOM;
 	int custom_vmode_param = VMODE_PARAM_HRES;
@@ -1544,7 +1616,7 @@ int main() {
 					break;
 				
 				case REG_ZZ_SET_SPLIT_POS:
-					video_formatter_write(zdata, MNTVF_OP_SPLIT_POS);
+					video_formatter_write(zdata, MNTVF_OP_REPORT_LINE);
 					break;
 
 				// Ethernet
@@ -1882,7 +1954,7 @@ int main() {
 						vmode_vdiv = 1;
 					}
 					videocap_area_clear();
-					init_vdma(vmode_hsize, vmode_vsize, 1, vmode_vdiv);
+					init_vdma(vmode_hsize, vmode_vsize, 1, vmode_vdiv, (u32)framebuffer + framebuffer_pan_offset);
 					video_formatter_valign();
 					printf("videocap interlace mode changed to %d.\n", interlace);
 
@@ -1910,11 +1982,11 @@ int main() {
 		}
 
 		// re-init VDMA if requested
-		if (request_video_align) {
-			vblank = (zstate_raw & (1<<21));
-			if (vblank) {
+		vblank = (zstate_raw & (1<<21));
+		if (vblank) {
+			if (request_video_align) {
 				request_video_align = 0;
-				init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv);
+				init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv, (u32)framebuffer + framebuffer_pan_offset);
 			}
 		}
 
@@ -1989,8 +2061,6 @@ void arm_exception_handler_illinst(void *callback) {
 }
 
 void DataAbort_InterruptHandler(void *InstancePtr) {
-	printf("Data abort exception on %s, address %p\n", write_probe ? "write" : "read", mem_test_addr);
-	//mem_test_addr += 1;
-	//xil_printf("Data abort: i: 0x%08x, i*64: 0x%08x, p: 0x%08x\r\n", i, i * 64, x + (i * 64));
-	while(1) {}
+	while(1) {
+	}
 }

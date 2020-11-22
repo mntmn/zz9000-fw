@@ -2,10 +2,14 @@
 #include "gfx.h"
 #include <xil_types.h>
 #include "xil_printf.h"
-#include "compression.h"
+#include "compression/compression.h"
+#include "xtime_l.h"
 
 extern unsigned int cur_mem_offset;
+extern uint8_t imc_tables_initialized;
 int current_c37_encoder = -1;
+
+#define Z3_OUTPUT_ADDR 0x3400000
 
 void handle_acc_op(uint16_t zdata)
 {
@@ -217,13 +221,31 @@ void handle_acc_op(uint16_t zdata)
                     break;
                 }
                 case ACC_CMPTYPE_SMUSH_CODEC37: {
+                    //XTime tim1, tim2;
+                    //XTime_GetTime(&tim1);
                     uint32_t dest_offset = data->x[0] + (data->pitch[0] * data->y[0]);
                     Codec37Decoder_decode(Codec37Decoder_GetCur(), (uint8_t *)data->offset[0] + dest_offset, (uint8_t *)data->clut4);
+                    //XTime_GetTime(&tim2);
+                    //printf("c37 frame size: %d bytes", data->u32_user[0]);
+                    //printf("c37 frame decode time: %f ms\n", ((float)(tim2 - tim1) / (float)COUNTS_PER_SECOND) * 1000.0f);
                     break;
                 }
                 case ACC_CMPTYPE_SMUSH_CODEC47: {
+                    //XTime tim1, tim2;
+                    //XTime_GetTime(&tim1);
                     uint32_t dest_offset = data->x[0] + (data->pitch[0] * data->y[0]);
                     Codec47Decoder_decode(Codec47Decoder_GetCur(), (uint8_t *)data->offset[0] + dest_offset, (uint8_t *)data->clut4);
+                    //XTime_GetTime(&tim2);
+                    //printf("c47 frame size: %d bytes", data->u32_user[0]);
+                    //printf("c47 frame decode time: %f ms\n", ((float)(tim2 - tim1) / (float)COUNTS_PER_SECOND) * 1000.0f);
+                    break;
+                }
+                case ACC_CMPTYPE_IMA_ADPCM_VBR: {
+                    if (!imc_tables_initialized) {
+                        init_imc_tables();
+                        imc_tables_initialized = 1;
+                    }
+                    decompress_adpcm((uint8_t *)data->clut4, (uint8_t *)data->offset[0], data->u8_user[1]);
                     break;
                 }
             }
@@ -250,11 +272,11 @@ void handle_acc_op(uint16_t zdata)
                         SWAP16(data->x[0]);
                         SWAP16(data->y[0]);
                         Codec47Decoder_Init(Codec47Decoder_GetCur(), data->x[0], data->y[0]);
-                        printf("Initializing codec37 decoder %d: %dx%d\n", Codec47Decoder_GetCur(), data->x[0], data->y[0]);
+                        printf("Initializing codec47 decoder %d: %dx%d\n", Codec47Decoder_GetCur(), data->x[0], data->y[0]);
                         data->u8_user[2] = Codec47Decoder_GetCur() + 1;
                     }
                     else {
-                        printf("Switching to next codec37 decoder.\n");
+                        printf("Switching to next codec47 decoder.\n");
                         Codec47Decoder_Next();
                     }
                     break;

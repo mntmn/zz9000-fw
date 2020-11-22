@@ -26,15 +26,18 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define byte uint8_t
-#define int32 int32_t
-#define int16 int16_t
-#define uint16 uint16_t
-#define uint32 uint32_t
-
 void bompDecodeLine(uint8_t *dst, const uint8_t *src, int len);
 
 static int num_decoders = 0;
+
+#define int32 int32_t
+#define byte uint8_t
+#define int16 int16_t
+#define int8 int8_t
+#define uint16 uint16_t
+#define uint32 uint32_t
+
+#define ARRAYSIZE(x) ((int)(sizeof(x) / sizeof(x[0])))
 
 struct Codec47Decoder {
 	int32 _deltaSize;
@@ -52,6 +55,21 @@ struct Codec47Decoder {
 	int32 _frameSize;
 	int _width, _height;
 };
+
+struct Codec47Decoder c47_decoders[4];
+
+void Codec47Decoder_Next()
+{
+	num_decoders++;
+	if (num_decoders > 3) {
+		num_decoders = 0;
+	}
+}
+
+int Codec47Decoder_GetCur()
+{
+	return num_decoders;
+}
 
 #define COPY_4X1_LINE(dst, src)			\
 	*(uint32 *)(dst) = *(const uint32 *)(src)
@@ -73,6 +91,11 @@ struct Codec47Decoder {
 		(dst)[1] = val;	\
 	} while (0)
 
+inline int32 ABS(int32 x)
+{
+    return (x >= 0) ? x : -x;
+}
+
 inline uint16 READ_UINT16(const void *ptr) {
 	return *(const uint16 *)(ptr);
 }
@@ -81,24 +104,24 @@ inline uint32 READ_UINT32(const void *ptr) {
 	return *(const uint32 *)(ptr);
 }
 
-static const uint8_t codec47_table_small1[] = {
+static const  int8 codec47_table_small1[] = {
   0, 1, 2, 3, 3, 3, 3, 2, 1, 0, 0, 0, 1, 2, 2, 1,
 };
 
-static const uint8_t codec47_table_small2[] = {
+static const int8 codec47_table_small2[] = {
   0, 0, 0, 0, 1, 2, 3, 3, 3, 3, 2, 1, 1, 1, 2, 2,
 };
 
-static const uint8_t codec47_table_big1[] = {
+static const int8 codec47_table_big1[] = {
   0, 2, 5, 7, 7, 7, 7, 7, 7, 5, 2, 0, 0, 0, 0, 0,
 };
 
-static const uint8_t codec47_table_big2[] = {
+static const int8 codec47_table_big2[] = {
   0, 0, 0, 0, 1, 3, 4, 6, 7, 7, 7, 7, 6, 4, 3, 1,
 };
 
-static const uint8_t codec47_table[] = {
-      0,   0,  -1, -43,   6, -43,  -9, -42,  13, -41,
+static const int8 codec47_table[] = {
+		0,   0,  -1, -43,   6, -43,  -9, -42,  13, -41,
 	-16, -40,  19, -39, -23, -36,  26, -34,  -2, -33,
 	  4, -33, -29, -32,  -9, -32,  11, -31, -16, -29,
 	 32, -29,  18, -28, -34, -26, -22, -25,  -1, -25,
@@ -146,33 +169,18 @@ static const uint8_t codec47_table[] = {
 	 38,  20, -13,  21,  12,  22, -36,  23, -24,  23,
 	 -8,  24,   7,  24,  -3,  25,   1,  25,  22,  25,
 	 34,  26, -18,  28, -32,  29,  16,  29, -11,  31,
-	  9,  32,  29,  32,  -4,  33,   2,  33, -26,  34,
+		9,  32,  29,  32,  -4,  33,   2,  33, -26,  34,
 	 23,  36, -19,  39,  16,  40, -13,  41,   9,  42,
 	 -6,  43,   1,  43,   0,   0,   0,   0,   0,   0
 };
 
-struct Codec47Decoder c47_decoders[4];
-
-void Codec47Decoder_Next()
-{
-	num_decoders++;
-	if (num_decoders > 3) {
-		num_decoders = 0;
-	}
-}
-
-int Codec47Decoder_GetCur()
-{
-	return num_decoders;
-}
-
-void Codec47Decoder_makeTablesInterpolation(int idx, int param) {
+void c47_makeTablesInterpolation(int idx, int param) {
     struct Codec47Decoder *dc = &c47_decoders[idx];
 	int32 variable1, variable2;
 	int32 b1, b2;
 	int32 value_table47_1_2, value_table47_1_1, value_table47_2_2, value_table47_2_1;
 	int32 tableSmallBig[64], tmp, s;
-	const uint8_t *table47_1 = 0, *table47_2 = 0;
+	const int8 *table47_1 = 0, *table47_2 = 0;
 	int32 *ptr_small_big;
 	byte *ptr;
 	int i, x, y;
@@ -196,7 +204,8 @@ void Codec47Decoder_makeTablesInterpolation(int idx, int param) {
 			ptr += 128;
 		}
 	} else {
-		printf("Error: Codec47Decoder::makeTablesInterpolation: unknown param %d", param);
+		printf("Codec47Decoder::makeTablesInterpolation: unknown param %d", param);
+        return;
 	}
 
 	s = 0;
@@ -233,8 +242,8 @@ void Codec47Decoder_makeTablesInterpolation(int idx, int param) {
 
 			memset(tableSmallBig, 0, param * param * 4);
 
-			variable2 = abs(value_table47_2_2 - value_table47_2_1);
-			tmp = abs(value_table47_1_2 - value_table47_1_1);
+			variable2 = ABS(value_table47_2_2 - value_table47_2_1);
+			tmp = ABS(value_table47_1_2 - value_table47_1_1);
 			if (variable2 <= tmp) {
 				variable2 = tmp;
 			}
@@ -317,9 +326,7 @@ void Codec47Decoder_makeTablesInterpolation(int idx, int param) {
 	}
 }
 
-#define ARRAYSIZE(x) ((int)(sizeof(x) / sizeof(x[0])))
-
-void Codec47Decoder_makeTables47(int idx, int width) {
+void c47_makeTables47(int idx, int width) {
     struct Codec47Decoder *dc = &c47_decoders[idx];
 	if (dc->_lastTableWidth == width)
 		return;
@@ -368,7 +375,7 @@ void Codec47Decoder_makeTables47(int idx, int width) {
 	} while (c < 32768);
 }
 
-void Codec47Decoder_level3(int idx, byte *d_dst) {
+void c47_level3(int idx, byte *d_dst) {
     struct Codec47Decoder *dc = &c47_decoders[idx];
 	int32 tmp;
 	byte code = *dc->_d_src++;
@@ -396,7 +403,7 @@ void Codec47Decoder_level3(int idx, byte *d_dst) {
 	}
 }
 
-void Codec47Decoder_level2(int idx, byte *d_dst) {
+void c47_level2(int idx, byte *d_dst) {
     struct Codec47Decoder *dc = &c47_decoders[idx];
 	int32 tmp;
 	byte code = *dc->_d_src++;
@@ -409,13 +416,13 @@ void Codec47Decoder_level2(int idx, byte *d_dst) {
 			d_dst += dc->_d_pitch;
 		}
 	} else if (code == 0xFF) {
-		Codec47Decoder_level3(idx, d_dst);
+		c47_level3(idx, d_dst);
 		d_dst += 2;
-		Codec47Decoder_level3(idx, d_dst);
+		c47_level3(idx, d_dst);
 		d_dst += dc->_d_pitch * 2 - 2;
-		Codec47Decoder_level3(idx, d_dst);
+		c47_level3(idx, d_dst);
 		d_dst += 2;
-		Codec47Decoder_level3(idx, d_dst);
+		c47_level3(idx, d_dst);
 	} else if (code == 0xFE) {
 		byte t = *dc->_d_src++;
 		for (i = 0; i < 4; i++) {
@@ -453,7 +460,7 @@ void Codec47Decoder_level2(int idx, byte *d_dst) {
 	}
 }
 
-void Codec47Decoder_level1(int idx, byte *d_dst) {
+void c47_level1(int idx, byte *d_dst) {
     struct Codec47Decoder *dc = &c47_decoders[idx];
 	int32 tmp, tmp2;
 	byte code = *dc->_d_src++;
@@ -467,13 +474,13 @@ void Codec47Decoder_level1(int idx, byte *d_dst) {
 			d_dst += dc->_d_pitch;
 		}
 	} else if (code == 0xFF) {
-		Codec47Decoder_level2(idx, d_dst);
+		c47_level2(idx, d_dst);
 		d_dst += 4;
-		Codec47Decoder_level2(idx, d_dst);
+		c47_level2(idx, d_dst);
 		d_dst += dc->_d_pitch * 4 - 4;
-		Codec47Decoder_level2(idx, d_dst);
+		c47_level2(idx, d_dst);
 		d_dst += 4;
-		Codec47Decoder_level2(idx, d_dst);
+		c47_level2(idx, d_dst);
 	} else if (code == 0xFE) {
 		byte t = *dc->_d_src++;
 		for (i = 0; i < 8; i++) {
@@ -515,7 +522,7 @@ void Codec47Decoder_level1(int idx, byte *d_dst) {
 	}
 }
 
-void Codec47Decoder_decode2(int idx, byte *dst, const byte *src, int width, int height, const byte *param_ptr) {
+void c47_decode2(int idx, byte *dst, const byte *src, int width, int height, const byte *param_ptr) {
     struct Codec47Decoder *dc = &c47_decoders[idx];
 	dc->_d_src = src;
 	dc->_paramPtr = param_ptr - 0xf8;
@@ -527,7 +534,7 @@ void Codec47Decoder_decode2(int idx, byte *dst, const byte *src, int width, int 
 	do {
 		int tmp_bw = bw;
 		do {
-			Codec47Decoder_level1(idx, dst);
+			c47_level1(idx, dst);
 			dst += 8;
 		} while (--tmp_bw);
 		dst += next_line;
@@ -535,9 +542,9 @@ void Codec47Decoder_decode2(int idx, byte *dst, const byte *src, int width, int 
 }
 
 inline void SWAP(uint8_t *a, uint8_t *b) {
-    uint8_t *tmp = a;
-    a = b;
-    b = tmp;
+    uint8_t *tmp = b;
+    b = a;
+    a = tmp;
 }
 
 void Codec47Decoder_Init(int idx, int width, int height) {
@@ -546,15 +553,16 @@ void Codec47Decoder_Init(int idx, int width, int height) {
 	dc->_width = width;
 	dc->_height = height;
 	dc->_tableBig = (byte *)0x30000000 + num_decoders * 0x1000000;
-	dc->_tableSmall = (byte *)0x30400000 + num_decoders * 0x1000000;
-	if ((dc->_tableBig != 0) && (dc->_tableSmall != 0)) {
-		Codec47Decoder_makeTablesInterpolation(idx, 4);
-		Codec47Decoder_makeTablesInterpolation(idx, 8);
+	dc->_tableSmall = (byte *)0x30800000 + num_decoders * 0x1000000;
+	if ((dc->_tableBig != NULL) && (dc->_tableSmall != NULL)) {
+        printf("c47: Making interpolation tables.\n");
+		c47_makeTablesInterpolation(idx, 4);
+		c47_makeTablesInterpolation(idx, 8);
 	}
 
 	dc->_frameSize = dc->_width * dc->_height;
 	dc->_deltaSize = dc->_frameSize * 3;
-	dc->_deltaBuf = (byte *)0x30800000 + num_decoders * 0x1000000;
+	dc->_deltaBuf = (byte *)0x31000000 + num_decoders * 0x1000000;
 	dc->_deltaBufs[0] = dc->_deltaBuf;
 	dc->_deltaBufs[1] = dc->_deltaBuf + dc->_frameSize;
 	dc->_curBuf = dc->_deltaBuf + dc->_frameSize * 2;
@@ -573,7 +581,7 @@ uint8_t Codec47Decoder_decode(int idx, byte *dst, const byte *src) {
 	const byte *gfx_data = src + 26;
 
 	if (seq_nb == 0) {
-		Codec47Decoder_makeTables47(idx, dc->_width);
+		c47_makeTables47(idx, dc->_width);
 		memset(dc->_deltaBufs[0], src[12], dc->_frameSize);
 		memset(dc->_deltaBufs[1], src[13], dc->_frameSize);
 		dc->_prevSeqNb = -1;
@@ -593,14 +601,14 @@ uint8_t Codec47Decoder_decode(int idx, byte *dst, const byte *src) {
 		break;
 	case 2:
 		if (seq_nb == dc->_prevSeqNb + 1) {
-			Codec47Decoder_decode2(idx, dc->_curBuf, gfx_data, dc->_width, dc->_height, src + 8);
+			c47_decode2(idx, dc->_curBuf, gfx_data, dc->_width, dc->_height, src + 8);
 		}
 		break;
 	case 3:
 		memcpy(dc->_curBuf, dc->_deltaBufs[1], dc->_frameSize);
 		break;
 	case 4:
-		memcpy(dc->_curBuf,dc-> _deltaBufs[0], dc->_frameSize);
+		memcpy(dc->_curBuf, dc->_deltaBufs[0], dc->_frameSize);
 		break;
 	case 5:
 		bompDecodeLine(dc->_curBuf, gfx_data, READ_UINT32(src + 14));
