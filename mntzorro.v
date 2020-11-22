@@ -194,7 +194,7 @@ module MNTZorro_v0_1_S00_AXI
    output reg [31:0] video_control_data_out,
    output reg [7:0]  video_control_op_out,
    output reg video_control_interlace_out,
-   input wire video_control_vblank_in,
+   input wire [1:0] video_control_vblank_in,
   
    // Xilinx AXI4-Lite implementation starts here ==============================
    
@@ -749,8 +749,11 @@ module MNTZorro_v0_1_S00_AXI
   
   reg [7:0] video_debug_reg;
   
-  assign arm_interrupt = zorro_ram_write_request | zorro_ram_read_request;
-
+`ifdef VARIANT_FW20
+    assign arm_interrupt = zorro_ram_write_request | zorro_ram_read_request;
+`else
+    assign arm_interrupt = video_control_vblank_in[0] | video_control_vblank_in[1];
+`endif
   // -- synchronizers ------------------------------------------
   always @(posedge S_AXI_ACLK) begin
     znUDS_sync  <= {znUDS_sync[1:0],ZORRO_NUDS};
@@ -949,6 +952,7 @@ module MNTZorro_v0_1_S00_AXI
   reg [31:0] video_control_data; // to output
   reg [7:0]  video_control_op;   // to output
   reg        video_control_vblank; // from input
+  reg        video_control_hblank; // from input
   reg        video_control_interlace;
   
   reg zorro_ram_read_flag;
@@ -2167,7 +2171,8 @@ module MNTZorro_v0_1_S00_AXI
     
     video_control_data_out <= video_control_data;
     video_control_op_out   <= video_control_op;
-    video_control_vblank   <= video_control_vblank_in;
+    video_control_vblank   <= video_control_vblank_in[0];
+    video_control_hblank   <= video_control_vblank_in[1];
     video_control_interlace_out <= video_control_interlace;
     
     // snoop the screen width for correct capture pitch
@@ -2186,7 +2191,7 @@ module MNTZorro_v0_1_S00_AXI
     //          `-- 24                   `-- 23         `-- 22 `-- 7:0
     
     out_reg3 <= {zorro_ram_write_request, zorro_ram_read_request, zorro_ram_write_bytes, ZORRO3, 
-                video_control_interlace, videocap_mode, videocap_ntsc, video_control_vblank, 13'b0, zorro_state};
+                video_control_interlace, videocap_mode, videocap_ntsc, video_control_vblank, video_control_hblank, 12'b0, zorro_state};
   end
 
   assign slv_reg_rden = axi_arready & S_AXI_ARVALID & ~axi_rvalid;

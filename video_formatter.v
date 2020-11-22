@@ -35,7 +35,7 @@ module video_formatter(
   input [31:0] control_data,
   input [7:0] control_op,
   input control_interlace,
-  output reg control_vblank
+  output reg [1:0]control_vblank
 );
 
 localparam OP_COLORMODE=1;
@@ -54,6 +54,7 @@ localparam OP_SPRITEXY=13;
 localparam OP_SPRITE_ADDR=14;
 localparam OP_SPRITE_DATA=15;
 localparam OP_VIDEOCAP=16; // we ignore this here, it's snooped by MNTZorro
+localparam OP_REPORT_LINE=17;
 
 localparam CMODE_8BIT=0;
 localparam CMODE_16BIT=1;
@@ -114,6 +115,7 @@ reg [11:0] sprite_addr_in;
 reg [11:0] sprite_x;
 reg [11:0] sprite_y;
 reg sprite_dbl;
+reg [11:0] report_y = 0;
 reg vga_sprite_dbl; // vga_domain
 reg [11:0] vga_sprite_x; // vga domain
 reg [11:0] vga_sprite_y; // vga domain
@@ -123,6 +125,7 @@ reg [11:0] sprite_px; // vga domain
 reg [11:0] sprite_py; // vga domain
 reg [23:0] sprite_pix; // vga domain
 reg sprite_on; // vga domain
+reg [11:0] vga_report_y; // vga domain
 
 always @(posedge m_axis_vid_aclk)
   begin
@@ -267,6 +270,9 @@ begin
     OP_SPRITE_DATA: begin
         sprite_buffer[sprite_addr_in] <= control_data_in[23:0];
       end
+    OP_REPORT_LINE: begin
+        report_y <= control_data_in[11:0];
+      end
   endcase
 end
 
@@ -323,6 +329,7 @@ always @(posedge dvi_clk) begin
   vga_sprite_x2 <= vga_sprite_x+(SPRITE_W<<sprite_dbl);
   vga_sprite_y2 <= vga_sprite_y+(SPRITE_H<<sprite_dbl);
   vga_sprite_dbl <= sprite_dbl;
+  vga_report_y <= report_y;
   
   // FIXME there is some non-determinism in the relationship
   // between this process and the fetching process
@@ -447,18 +454,28 @@ always @(posedge dvi_clk) begin
   else
     need_frame_sync <= 0;
   
-  if (counter_x>=vga_h_sync_start && counter_x<vga_h_sync_end)
+  if (counter_x>=vga_h_sync_start && counter_x<vga_h_sync_end) begin
     dvi_hsync <= 1^vga_sync_polarity;
-  else
+    if (vga_report_y != 0 && counter_y == vga_report_y - 1 && !control_vblank[1])
+      control_vblank[1] <= 1;
+    else begin
+      if (vga_report_y != 0 && control_vblank[1]) begin
+        if (counter_y != vga_report_y)
+          control_vblank[1] <= 0;
+      end
+    end
+  end else
     dvi_hsync <= 0^vga_sync_polarity;
     
   if (counter_y>=vga_v_sync_start && counter_y<vga_v_sync_end) begin
     dvi_vsync <= 1^vga_sync_polarity;
-    control_vblank <= 1;
+    if (!control_vblank[0])
+      control_vblank[0] <= 1;
   end
   else begin
     dvi_vsync <= 0^vga_sync_polarity;
-    control_vblank <= 0;
+    if (control_vblank[0])
+      control_vblank[0] <= 0;
   end
   // 4 clocks pipeline delay
   vga_h_rez_shifted <= vga_h_rez+4;
