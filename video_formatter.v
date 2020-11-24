@@ -454,20 +454,20 @@ always @(posedge dvi_clk) begin
   else
     need_frame_sync <= 0;
   
-  if (counter_x>=vga_h_sync_start && counter_x<vga_h_max) begin
+  if (counter_x >= vga_h_rez && counter_x < vga_h_max) begin
     dvi_hsync <= 1^vga_sync_polarity;
-    if (vga_report_y != 0 && counter_y == vga_report_y - 1 && !control_vblank[1])
+    if (vga_report_y != 0 && counter_y == vga_report_y - 1'b1 && !control_vblank[1])
       control_vblank[1] <= 1;
     else begin
       if (vga_report_y != 0 && control_vblank[1]) begin
-        if (counter_y != vga_report_y)
+        if (counter_y > vga_report_y + 1'b1)
           control_vblank[1] <= 0;
       end
     end
   end else
     dvi_hsync <= 0^vga_sync_polarity;
     
-  if (counter_y>=vga_v_sync_start && counter_y<vga_v_max) begin
+  if (counter_y >= vga_v_sync_start && counter_y < vga_v_max) begin
     dvi_vsync <= 1^vga_sync_polarity;
     if (!control_vblank[0])
       control_vblank[0] <= 1;

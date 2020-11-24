@@ -197,14 +197,14 @@ void handle_blitter_dma_op(uint16_t zdata)
             if (!sprite_enabled)
                 break;
 
-            SWAP16(data->x[0]);
-            SWAP16(data->y[0]);
+            SWAP16(data->x[0]);     SWAP16(data->y[0]);
 
             sprite_x_base = (int16_t)data->x[0];
             sprite_y_base = (int16_t)data->y[0];
 
             update_hw_sprite_pos((int16_t)data->x[0], (int16_t)data->y[0]);
             break;
+
         case OP_SPRITE_CLUT_BITMAP:
         case OP_SPRITE_BITMAP: {
             SWAP16(data->x[0]);		SWAP16(data->x[1]);
@@ -261,7 +261,7 @@ void handle_blitter_dma_op(uint16_t zdata)
             bgbuf_offset = (uint32_t *)(data->offset[0] & 0x0FFFFFFF);
             old_split_pos = split_pos;
             split_pos = data->y[0];
-            //printf("Screen split pos set to scanline %d (%.8X)\n", data->y[0], data->offset[0]);
+
             video_formatter_write(data->y[0], MNTVF_OP_REPORT_LINE);
             break;
 

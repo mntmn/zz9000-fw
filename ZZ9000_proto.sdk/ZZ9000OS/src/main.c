@@ -740,7 +740,13 @@ void update_hw_sprite_pos(int16_t x, int16_t y) {
 	else
 		sprite_x_adj = sprite_x + 2;
 
-	sprite_y = y + sprite_y_offset + 1;
+	if (split_pos == 0) {
+		sprite_y = y + sprite_y_offset + 1;
+	}
+	else {
+		sprite_y = y + split_pos + sprite_y_offset + 1;
+	}
+
 	// vertically doubled mode
 	if (scalemode & 2)
 		sprite_y_adj = sprite_y *= 2;
