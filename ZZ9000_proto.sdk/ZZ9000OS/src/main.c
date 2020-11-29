@@ -740,12 +740,7 @@ void update_hw_sprite_pos(int16_t x, int16_t y) {
 	else
 		sprite_x_adj = sprite_x + 2;
 
-	if (split_pos == 0) {
-		sprite_y = y + sprite_y_offset + 1;
-	}
-	else {
-		sprite_y = y + split_pos + sprite_y_offset + 1;
-	}
+	sprite_y = y + split_pos + sprite_y_offset + 1;
 
 	// vertically doubled mode
 	if (scalemode & 2)
@@ -1622,7 +1617,12 @@ int main() {
 					break;
 				
 				case REG_ZZ_SET_SPLIT_POS:
-					video_formatter_write(zdata, MNTVF_OP_REPORT_LINE);
+					blitter_src_offset += ADDR_ADJ;
+					bgbuf_offset = (uint32_t *)(blitter_src_offset & 0x0FFFFFFF);
+					old_split_pos = split_pos;
+					split_pos = zdata;
+
+					video_formatter_write(split_pos, MNTVF_OP_REPORT_LINE);
 					break;
 
 				// Ethernet
