@@ -733,7 +733,7 @@ void sprite_reset() {
 }
 
 void update_hw_sprite_pos(int16_t x, int16_t y) {
-	sprite_x = x + sprite_x_offset + 1;
+	sprite_x = x + sprite_x_offset;
 	// horizontally doubled mode
 	if (scalemode & 1)
 		sprite_x_adj = (sprite_x * 2) + 1;

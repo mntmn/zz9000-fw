@@ -245,6 +245,9 @@ void handle_blitter_dma_op(uint16_t zdata)
 
         case OP_PAN:
             SWAP32(data->offset[0]);
+            SWAP16(data->x[0]);     SWAP16(data->y[0]);
+            sprite_x_offset = (int16_t)data->x[0];
+            sprite_y_offset = (int16_t)data->y[0];
 
             framebuffer_pan_offset = data->offset[0];
             if (framebuffer_pan_offset != framebuffer_pan_offset_old) {
