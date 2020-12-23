@@ -72,6 +72,10 @@ void pattern_fill_rect(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y1
 	uint8_t draw_mode, uint8_t mask, uint32_t fg_color, uint32_t bg_color,
 	uint16_t x_offset, uint16_t y_offset,
 	uint8_t *tmpl_data, uint16_t tmpl_pitch, uint16_t loop_rows);
+void pattern_fill_rect2(uint32_t color_format, uint16_t rect_x1, uint16_t rect_y1, uint16_t w, uint16_t h,
+	uint8_t draw_mode, uint8_t mask, uint32_t fg_color, uint32_t bg_color,
+	uint16_t x_offset, uint16_t y_offset,
+	uint8_t *tmpl_data, uint16_t tmpl_pitch, uint16_t loop_rows);
 
 void draw_line(int16_t rect_x1, int16_t rect_y1, int16_t rect_x2, int16_t rect_y2, uint16_t len, uint16_t pattern, uint16_t pattern_offset, uint32_t fg_color, uint32_t bg_color, uint32_t color_format, uint8_t mask, uint8_t draw_mode);
 void draw_line_solid(int16_t rect_x1, int16_t rect_y1, int16_t rect_x2, int16_t rect_y2, uint16_t len, uint32_t fg_color, uint32_t color_format);
@@ -156,6 +160,15 @@ enum gfx_minterm_modes {
 #define SET_FG_PIXEL32_MASK(a) \
 	dp[x + a] = fg_color ^ (dp[x + a] & (color_mask ^ 0xFFFFFFFF));
 
+#define SET_FG_PIXEL8_MASK2(a) \
+	((uint8_t *)dp)[x + a] = u8_fg ^ (((uint8_t *)dp2)[x + a] & (mask ^ 0xFF));
+#define SET_BG_PIXEL8_MASK2(a) \
+	((uint8_t *)dp)[x + a] = u8_bg ^ (((uint8_t *)dp2)[x + a] & (mask ^ 0xFF));
+#define SET_FG_PIXEL16_MASK2(a) \
+	((uint16_t *)dp)[x + a] = fg_color ^ (((uint16_t *)dp2)[x + a] & (color_mask ^ 0xFFFF));
+#define SET_FG_PIXEL32_MASK2(a) \
+	dp[x + a] = fg_color ^ (dp2[x + a] & (color_mask ^ 0xFFFFFFFF));
+
 #define SET_FG_PIXEL \
 	switch (color_format) { \
 		case MNTVA_COLOR_8BIT: \
@@ -176,6 +189,26 @@ enum gfx_minterm_modes {
 			SET_FG_PIXEL32(0); break; \
 	}
 
+#define SET_FG_PIXEL_MASK2 \
+	switch (color_format) { \
+		case MNTVA_COLOR_8BIT: \
+			SET_FG_PIXEL8_MASK2(0); break; \
+		case MNTVA_COLOR_16BIT565: \
+			SET_FG_PIXEL16(0); break; \
+		case MNTVA_COLOR_32BIT: \
+			SET_FG_PIXEL32(0); break; \
+	}
+
+#define SET_BG_PIXEL_MASK2 \
+	switch (color_format) { \
+		case MNTVA_COLOR_8BIT: \
+			SET_BG_PIXEL8_MASK2(0); break; \
+		case MNTVA_COLOR_16BIT565: \
+			SET_BG_PIXEL16(0); break; \
+		case MNTVA_COLOR_32BIT: \
+			SET_BG_PIXEL32(0); break; \
+	}
+
 #define SET_BG_PIXEL \
 	switch (color_format) { \
 		case MNTVA_COLOR_8BIT: \
@@ -194,6 +227,74 @@ enum gfx_minterm_modes {
 			SET_BG_PIXEL16(0); break; \
 		case MNTVA_COLOR_32BIT: \
 			SET_BG_PIXEL32(0); break; \
+	}
+
+#define SET_FG_PIXELS_MASK2 \
+	switch (color_format) { \
+		case MNTVA_COLOR_8BIT: \
+			if (cur_byte & 0x80) SET_FG_PIXEL8_MASK2(0); \
+			if (cur_byte & 0x40) SET_FG_PIXEL8_MASK2(1); \
+			if (cur_byte & 0x20) SET_FG_PIXEL8_MASK2(2); \
+			if (cur_byte & 0x10) SET_FG_PIXEL8_MASK2(3); \
+			if (cur_byte & 0x08) SET_FG_PIXEL8_MASK2(4); \
+			if (cur_byte & 0x04) SET_FG_PIXEL8_MASK2(5); \
+			if (cur_byte & 0x02) SET_FG_PIXEL8_MASK2(6); \
+			if (cur_byte & 0x01) SET_FG_PIXEL8_MASK2(7); \
+			break; \
+		case MNTVA_COLOR_16BIT565: \
+			if (cur_byte & 0x80) SET_FG_PIXEL16(0); \
+			if (cur_byte & 0x40) SET_FG_PIXEL16(1); \
+			if (cur_byte & 0x20) SET_FG_PIXEL16(2); \
+			if (cur_byte & 0x10) SET_FG_PIXEL16(3); \
+			if (cur_byte & 0x08) SET_FG_PIXEL16(4); \
+			if (cur_byte & 0x04) SET_FG_PIXEL16(5); \
+			if (cur_byte & 0x02) SET_FG_PIXEL16(6); \
+			if (cur_byte & 0x01) SET_FG_PIXEL16(7); \
+			break; \
+		case MNTVA_COLOR_32BIT: \
+			if (cur_byte & 0x80) SET_FG_PIXEL32(0); \
+			if (cur_byte & 0x40) SET_FG_PIXEL32(1); \
+			if (cur_byte & 0x20) SET_FG_PIXEL32(2); \
+			if (cur_byte & 0x10) SET_FG_PIXEL32(3); \
+			if (cur_byte & 0x08) SET_FG_PIXEL32(4); \
+			if (cur_byte & 0x04) SET_FG_PIXEL32(5); \
+			if (cur_byte & 0x02) SET_FG_PIXEL32(6); \
+			if (cur_byte & 0x01) SET_FG_PIXEL32(7); \
+			break; \
+	}
+
+#define SET_FG_OR_BG_PIXELS_MASK2 \
+	switch (color_format) { \
+		case MNTVA_COLOR_8BIT: \
+			if (cur_byte & 0x80) SET_FG_PIXEL8_MASK2(0) else SET_BG_PIXEL8_MASK2(0) \
+			if (cur_byte & 0x40) SET_FG_PIXEL8_MASK2(1) else SET_BG_PIXEL8_MASK2(1) \
+			if (cur_byte & 0x20) SET_FG_PIXEL8_MASK2(2) else SET_BG_PIXEL8_MASK2(2) \
+			if (cur_byte & 0x10) SET_FG_PIXEL8_MASK2(3) else SET_BG_PIXEL8_MASK2(3) \
+			if (cur_byte & 0x08) SET_FG_PIXEL8_MASK2(4) else SET_BG_PIXEL8_MASK2(4) \
+			if (cur_byte & 0x04) SET_FG_PIXEL8_MASK2(5) else SET_BG_PIXEL8_MASK2(5) \
+			if (cur_byte & 0x02) SET_FG_PIXEL8_MASK2(6) else SET_BG_PIXEL8_MASK2(6) \
+			if (cur_byte & 0x01) SET_FG_PIXEL8_MASK2(7) else SET_BG_PIXEL8_MASK2(7) \
+			break; \
+		case MNTVA_COLOR_16BIT565: \
+			if (cur_byte & 0x80) SET_FG_PIXEL16(0) else SET_BG_PIXEL16(0) \
+			if (cur_byte & 0x40) SET_FG_PIXEL16(1) else SET_BG_PIXEL16(1) \
+			if (cur_byte & 0x20) SET_FG_PIXEL16(2) else SET_BG_PIXEL16(2) \
+			if (cur_byte & 0x10) SET_FG_PIXEL16(3) else SET_BG_PIXEL16(3) \
+			if (cur_byte & 0x08) SET_FG_PIXEL16(4) else SET_BG_PIXEL16(4) \
+			if (cur_byte & 0x04) SET_FG_PIXEL16(5) else SET_BG_PIXEL16(5) \
+			if (cur_byte & 0x02) SET_FG_PIXEL16(6) else SET_BG_PIXEL16(6) \
+			if (cur_byte & 0x01) SET_FG_PIXEL16(7) else SET_BG_PIXEL16(7) \
+			break; \
+		case MNTVA_COLOR_32BIT: \
+			if (cur_byte & 0x80) SET_FG_PIXEL32(0) else SET_BG_PIXEL32(0) \
+			if (cur_byte & 0x40) SET_FG_PIXEL32(1) else SET_BG_PIXEL32(1) \
+			if (cur_byte & 0x20) SET_FG_PIXEL32(2) else SET_BG_PIXEL32(2) \
+			if (cur_byte & 0x10) SET_FG_PIXEL32(3) else SET_BG_PIXEL32(3) \
+			if (cur_byte & 0x08) SET_FG_PIXEL32(4) else SET_BG_PIXEL32(4) \
+			if (cur_byte & 0x04) SET_FG_PIXEL32(5) else SET_BG_PIXEL32(5) \
+			if (cur_byte & 0x02) SET_FG_PIXEL32(6) else SET_BG_PIXEL32(6) \
+			if (cur_byte & 0x01) SET_FG_PIXEL32(7) else SET_BG_PIXEL32(7) \
+			break; \
 	}
 
 #define SET_FG_PIXELS \

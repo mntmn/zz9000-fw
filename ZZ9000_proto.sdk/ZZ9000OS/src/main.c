@@ -58,6 +58,9 @@ typedef u8 uint8_t;
 #define IIC_SCLK_RATE	400000
 #define GPIO_DEVICE_ID		XPAR_XGPIOPS_0_DEVICE_ID
 
+#define CACHE_TRICK_ADDR_LOWER	0x7800000
+#define CACHE_TRICK_ADDR_UPPER	0x7F00000
+
 #define I2C_PAUSE 10
 
 // I2C controller instance
@@ -95,6 +98,8 @@ float xadc_get_int_voltage() {
 // which can be replaced by the DMA acceleration functionality entirely, but some
 // software still relies on this legacy register.
 unsigned int cur_mem_offset = 0x3500000;
+// Memory offset for tricking the ARM CPU into doing a cache commit to memory.
+unsigned int cur_cache_trick_offset = CACHE_TRICK_ADDR_LOWER;
 
 int hdmi_ctrl_write_byte(u8 addr, u8 value) {
 	u8 buffer[2];
@@ -486,13 +491,13 @@ void pixelclock_init(int mhz) {
 	//XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR,  0x25C, 0x00000001);
 
 	phase = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x20C);
-	//printf("CLK phase: %lu\n", phase);
+	printf("CLK phase: %lu\n", phase);
 	duty = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x210);
-	//printf("CLK duty: %lu\n", duty);
+	printf("CLK duty: %lu\n", duty);
 	divide = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x208);
-	//printf("CLK divide: %lu\n", divide);
+	printf("CLK divide: %lu\n", divide);
 	muldiv = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200);
-	//printf("CLK muldiv: %lu\n", muldiv);
+	printf("CLK muldiv: %lu\n", muldiv);
 }
 
 void pixelclock_init_2(struct zz_video_mode *mode) {
@@ -516,13 +521,13 @@ void pixelclock_init_2(struct zz_video_mode *mode) {
 	//XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR,  0x25C, 0x00000001);
 
 	phase = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x20C);
-	//printf("CLK phase: %lu\n", phase);
+	printf("CLK phase: %lu\n", phase);
 	duty = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x210);
-	//printf("CLK duty: %lu\n", duty);
+	printf("CLK duty: %lu\n", duty);
 	divide = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x208);
-	//printf("CLK divide: %lu\n", divide);
+	printf("CLK divide: %lu\n", divide);
 	muldiv = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200);
-	//printf("CLK muldiv: %lu\n", muldiv);
+	printf("CLK muldiv: %lu\n", muldiv);
 }
 
 // FIXME!
@@ -609,24 +614,24 @@ void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
 
 void video_system_init_2(struct zz_video_mode *mode, int hdiv, int vdiv) {
 
-	/*printf("VSI: %d x %d [%d x %d] %d MHz %d Hz, hdiv: %d vdiv: %d\n", mode->hres,
-			mode->vres, mode->hmax, mode->vmax, mode->mhz, mode->vhz, hdiv, vdiv);*/
+	printf("VSI: %d x %d [%d x %d] %d MHz %d Hz, hdiv: %d vdiv: %d\n", mode->hres,
+			mode->vres, mode->hmax, mode->vmax, mode->mhz, mode->vhz, hdiv, vdiv);
 
-	//printf("pixelclock_init()...\n");
+	printf("pixelclock_init()...\n");
 	pixelclock_init_2(mode);
-	//printf("...done.\n");
+	printf("...done.\n");
 
-	//printf("hdmi_set_video_mode()...\n");
-	//hdmi_set_video_mode(hres, vres, mhz, vhz, hdmi);
+	printf("hdmi_set_video_mode()...\n");
+	hdmi_set_video_mode(mode->hres, mode->vres, mode->mhz, mode->vhz, mode->hdmi);
 
-	//printf("hdmi_ctrl_init()...\n");
+	printf("hdmi_ctrl_init()...\n");
 	hdmi_ctrl_init();
 
-	//printf("init_vdma()...\n");
+	printf("init_vdma()...\n");
 	init_vdma(mode->hres, mode->vres, hdiv, vdiv, (u32)framebuffer + framebuffer_pan_offset);
-	//printf("...done.\n");
+	printf("...done.\n");
 
-	//dump_vdma_status(&vdma);
+	dump_vdma_status(&vdma);
 }
 
 // Our address space is relative to the autoconfig base address (for example, it could be 0x600000)
@@ -1917,7 +1922,11 @@ int main() {
 			// we flush the cache at regular intervals to avoid too much visible cache activity on the screen
 			// FIXME make this adjustable for user
 			if (cache_counter > 25000) {
-				Xil_DCacheFlush();
+				//Xil_DCacheFlush();
+				memcpy((uint32_t*) ((u32)cur_cache_trick_offset - 0x100000), (uint32_t*) ((u32)cur_cache_trick_offset), 0x10000);
+				cur_cache_trick_offset += 0x10000;
+				if (cur_cache_trick_offset > CACHE_TRICK_ADDR_UPPER)
+					cur_cache_trick_offset = CACHE_TRICK_ADDR_LOWER;
 				cache_counter = 0;
 			}
 			cache_counter++;

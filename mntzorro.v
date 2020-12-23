@@ -43,11 +43,11 @@
 `define Z3_SIZE_256MB 32'h10000000 // 256MB for Zorro 3
 `define ARM_MEMORY_START 32'h001f0000
 `define VIDEOCAP_ADDR 32'h01000000 // ARM_MEMORY_START+0xe0_0000
-`define TX_FRAME_ADDRESS 32'h0fd10000
-`define RX_FRAME_ADDRESS 32'h0fd20000
-`define RX_BACKLOG_ADDRESS 32'h0fe00000
+`define TX_FRAME_ADDRESS 32'h3fd10000
+`define RX_FRAME_ADDRESS 32'h3fd20000
+`define RX_BACKLOG_ADDRESS 32'h3fe00000
 `define FRAME_SIZE 24'h2048
-`define USB_BLOCK_STORAGE_ADDRESS 32'h0fe10000
+`define USB_BLOCK_STORAGE_ADDRESS 32'h3fe10000
 
 `define C_M00_AXI_TARGET_SLAVE_BASE_ADDR 32'h10000000
 `define C_M00_AXI_ID_WIDTH   1
@@ -1474,7 +1474,7 @@ module MNTZorro_v0_1_S00_AXI
             end
             'h0100: begin
               if (!z3_curpic) begin
-                data_z3_hi16 <= 'b1011_1111_1111_1111; // next board related (1), 256MB 1024MB fixme
+                data_z3_hi16 <= 'b1100_1111_1111_1111; // next board related (1), 256MB 1024MB fixme
               end else begin
                 data_z3_hi16 <= 'b0100_1111_1111_1111; // next board unrelated (0), 256MB 1024MB fixme
               end
@@ -1588,7 +1588,7 @@ module MNTZorro_v0_1_S00_AXI
           reg_low <= ram_low + 'h1000;
           reg_high <= ram_low + 'h2000;
           
-          z3_ram_high  <= z3_ram_low + `Z3_SIZE_128MB;
+          z3_ram_high  <= z3_ram_low + `Z3_SIZE_256MB;
           z3_fast_high  <= z3_fast_low + `Z3_SIZE_256MB;
           z3_reg_low   <= z3_ram_low + 'h1000;
           z3_reg_high  <= z3_ram_low + 'h2000;
