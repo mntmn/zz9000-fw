@@ -59,7 +59,7 @@ typedef u8 uint8_t;
 #define GPIO_DEVICE_ID		XPAR_XGPIOPS_0_DEVICE_ID
 
 #define CACHE_TRICK_ADDR_LOWER	0x7800000
-#define CACHE_TRICK_ADDR_UPPER	0x7E00000
+#define CACHE_TRICK_ADDR_UPPER	0x7F00000
 
 #define I2C_PAUSE 10
 
@@ -832,13 +832,6 @@ void isr0 (void *intc_inst_ptr) {
 			init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv, (u32)framebuffer + framebuffer_pan_offset);
 			if (old_split_pos != 0)
 				old_split_pos = 0;
-		}
-		else if (vblank) {
-			//init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv, (u32)framebuffer + framebuffer_pan_offset);
-			memcpy((uint32_t*) ((u32)cur_cache_trick_offset + 0x100000), (uint32_t*) ((u32)cur_cache_trick_offset), 0x100000);
-			cur_cache_trick_offset += 0x100000;
-			if (cur_cache_trick_offset > CACHE_TRICK_ADDR_UPPER)
-				cur_cache_trick_offset = CACHE_TRICK_ADDR_LOWER;
 		}
 	}
 }
@@ -1930,6 +1923,10 @@ int main() {
 			// FIXME make this adjustable for user
 			if (cache_counter > 25000) {
 				//Xil_DCacheFlush();
+				memcpy((uint32_t*) ((u32)cur_cache_trick_offset - 0x100000), (uint32_t*) ((u32)cur_cache_trick_offset), 0x10000);
+				cur_cache_trick_offset += 0x10000;
+				if (cur_cache_trick_offset > CACHE_TRICK_ADDR_UPPER)
+					cur_cache_trick_offset = CACHE_TRICK_ADDR_LOWER;
 				cache_counter = 0;
 			}
 			cache_counter++;
