@@ -229,7 +229,7 @@ void hdmi_ctrl_init() {
 
 XAxiVdma vdma;
 u32* framebuffer = 0;
-u32* bgbuf_offset = 0;
+u32 bgbuf_offset = 0;
 
 uint16_t split_pos = 0, old_split_pos = 0;
 u32 framebuffer_pan_offset = 0;
@@ -420,7 +420,7 @@ void pixelclock_init(int mhz) {
 	// Max multiplier is 64
 	// Max div is 56
 	// Max otherdiv is 128
-	
+
 	switch (mhz) {
 		case 50:
 			mul = 15;
@@ -736,9 +736,9 @@ void update_hw_sprite_pos(int16_t x, int16_t y) {
 	sprite_x = x + sprite_x_offset;
 	// horizontally doubled mode
 	if (scalemode & 1)
-		sprite_x_adj = (sprite_x * 2) + 1;
+		sprite_x_adj = (sprite_x * 2) + 2; // FIXME adjusted during A500 tests by mntmn, was +1
 	else
-		sprite_x_adj = sprite_x + 2;
+		sprite_x_adj = sprite_x + 4; // FIXME adjusted during A500 tests by mntmn, was +2
 
 	sprite_y = y + split_pos + sprite_y_offset + 1;
 
@@ -810,23 +810,36 @@ void reset_default_videocap_pan() {
 #define INTC_INTERRUPT_ID_1 62 // IRQ_F2P[1:1]
 static XScuGic intc;
 
+static int isr_flush_count=0;
+
 // interrupt service routine for IRQ_F2P[0:0]
+// vblank + raster position interrupt
 void isr0 (void *intc_inst_ptr) {
 	u32 zstate = mntzorro_read(MNTZ_BASE_ADDR, MNTZORRO_REG3);
 
 	int videocap_enabled = (zstate & (1 << 23));
+	int vblank = (zstate & (1 << 21));
+	int hblank = (zstate & (1 << 20));
 
 	if (!videocap_enabled) {
-		int vblank = (zstate & (1 << 21));
-		int hblank = (zstate & (1 << 20));
-
 		if (hblank && split_pos != 0) {
-			init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv, (u32)(bgbuf_offset));
+			init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv, (u32)framebuffer + bgbuf_offset);
 		}
 		if (vblank && (split_pos != 0 || (split_pos == 0 && old_split_pos != 0)))  {
 			init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv, (u32)framebuffer + framebuffer_pan_offset);
 			if (old_split_pos != 0)
 				old_split_pos = 0;
+		}
+	}
+
+	// flush the data caches synchronized to full frames
+	if (!vblank || (split_pos == 0)) {
+		if (isr_flush_count > 0) {
+			Xil_L1DCacheFlush();
+			Xil_L2CacheFlush();
+			isr_flush_count = 0;
+		} else {
+			isr_flush_count++;
 		}
 	}
 }
@@ -1251,6 +1264,12 @@ int main() {
 						request_video_align = 1;
 						framebuffer_pan_offset_old = framebuffer_pan_offset;
 					}
+
+					// cursor offset support for p96 split screen
+					sprite_x_offset = rect_x1;
+					sprite_y_offset = rect_y1;
+					printf("sprite xo: %d yo: %d\n",sprite_x_offset,sprite_y_offset);
+
 					break;
 
 				case REG_ZZ_BLIT_SRC_HI:
@@ -1292,44 +1311,16 @@ int main() {
 
 					videocap_video_mode = zdata &0xff;
 					break;
-				case REG_ZZ_SPRITE_X:
+				//case REG_ZZ_SPRITE_X:
 				case REG_ZZ_SPRITE_Y:
 					if (!sprite_enabled)
 						break;
-					if (zaddr == REG_ZZ_SPRITE_X) {
-						// The "+#" offset at the end is dependent on implementation timing slack, and needs
-						// to be adjusted based on the sprite X offset produced by the current run.
-						sprite_x = (int16_t)zdata + sprite_x_offset + 3;
-						// horizontally doubled mode
-						if (scalemode & 1) sprite_x *=2;
-						sprite_x_adj = sprite_x;
-					}
-					else {
-						sprite_y = (int16_t)zdata + sprite_y_offset + 1;
-						// vertically doubled mode
-						if (scalemode & 2) sprite_y *= 2;
-						sprite_y_adj = sprite_y;
 
-						if (sprite_x < 0 || sprite_y < 0) {
-							if (sprite_clip_x != sprite_x || sprite_clip_y != sprite_y) {
-								clip_hw_sprite((sprite_x < 0) ? sprite_x : 0, (sprite_y < 0) ? sprite_y : 0);
-							}
-							sprite_clipped = 1;
-							if (sprite_x < 0) {
-								sprite_x_adj = 0;
-								sprite_clip_x = sprite_x;
-							}
-							if (sprite_y < 0) {
-								sprite_y_adj = 0;
-								sprite_clip_y = sprite_y;
-							}
-						}
-						else if (sprite_clipped && sprite_x >= 0 && sprite_y >= 0) {
-							clip_hw_sprite(0, 0);
-							sprite_clipped = 0;
-						}
-						video_formatter_write((sprite_y_adj << 16) | sprite_x_adj, MNTVF_OP_SPRITE_XY);
-					}
+					sprite_x_base = (int16_t)rect_x1;
+					sprite_y_base = (int16_t)rect_y1;
+
+					update_hw_sprite_pos(sprite_x_base, sprite_y_base);
+
 					break;
 				case REG_ZZ_SPRITE_BITMAP: {
 					if (zdata == 1) { // Hardware sprite enabled
@@ -1345,14 +1336,14 @@ int main() {
 							+ blitter_src_offset);
 
 					clear_hw_sprite();
-					
+
 					sprite_x_offset = rect_x1;
 					sprite_y_offset = rect_y1;
 					sprite_width  = rect_x2;
 					sprite_height = rect_y2;
 
 					update_hw_sprite(bmp_data, sprite_colors, sprite_width, sprite_height);
-					update_hw_sprite_pos(sprite_x, sprite_y);
+					update_hw_sprite_pos(sprite_x_base, sprite_y_base);
 					break;
 				}
 				case REG_ZZ_SPRITE_COLORS: {
@@ -1456,7 +1447,7 @@ int main() {
 											(uint32_t*) ((u32) framebuffer
 													+ blitter_dst_offset),
 											blitter_dst_pitch, MINTERM_SRC);
-						else 
+						else
 							copy_rect(rect_x1, rect_y1, rect_x2, rect_y2, rect_x3,
 									rect_y3, blitter_colormode & 0x0F,
 									(uint32_t*) ((u32) framebuffer
@@ -1505,7 +1496,7 @@ int main() {
 								rect_rgb, rect_rgb2, rect_x3, rect_y3, tmpl_data,
 								blitter_src_pitch);
 					}
-					
+
 					break;
 				}
 
@@ -1615,10 +1606,9 @@ int main() {
 					invert_rect(rect_x1, rect_y1, rect_x2, rect_y2,
 							zdata & 0xFF, blitter_colormode);
 					break;
-				
+
 				case REG_ZZ_SET_SPLIT_POS:
-					blitter_src_offset += ADDR_ADJ;
-					bgbuf_offset = (uint32_t *)(blitter_src_offset & 0x0FFFFFFF);
+					bgbuf_offset = blitter_src_offset;
 					old_split_pos = split_pos;
 					split_pos = zdata;
 
@@ -1913,14 +1903,6 @@ int main() {
 			need_req_ack = 2;
 		} else {
 			// there are no read/write requests, we can do other housekeeping
-
-			// we flush the cache at regular intervals to avoid too much visible cache activity on the screen
-			// FIXME make this adjustable for user
-			if (cache_counter > 25000) {
-				Xil_DCacheFlush();
-				cache_counter = 0;
-			}
-			cache_counter++;
 
 			int videocap_enabled = (zstate_raw & (1 << 23));
 			int videocap_ntsc = (zstate_raw & (1<<22));
