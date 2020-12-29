@@ -127,7 +127,7 @@ void handle_blitter_dma_op(uint16_t zdata)
                     printf("M:%.2X R: %d D: %d\n", data->mask, data->user[0], data->u8_user[GFXDATA_U8_DRAWMODE]);
                 }
 
-                pattern_fill_rect2(data->u8_user[GFXDATA_U8_COLORMODE],
+                pattern_fill_rect(data->u8_user[GFXDATA_U8_COLORMODE],
                         data->x[0], data->y[0], data->x[1], data->y[1],
                         data->u8_user[GFXDATA_U8_DRAWMODE], data->mask,
                         data->rgb[0], data->rgb[1], data->x[2], data->y[2],
