@@ -39,7 +39,8 @@
 `define REG_SIZE 32'h01000
 `define AUTOCONF_LOW  24'he80000
 `define AUTOCONF_HIGH 24'he80080
-`define Z3_RAM_SIZE 32'h10000000 // 256MB for Zorro 3
+`define Z3_SIZE_128MB 32'h08000000
+`define Z3_SIZE_256MB 32'h10000000 // 256MB for Zorro 3
 `define ARM_MEMORY_START 32'h001f0000
 `define VIDEOCAP_ADDR 32'h01000000 // ARM_MEMORY_START+0xe0_0000
 `define TX_FRAME_ADDRESS 32'h0fd10000
@@ -621,11 +622,14 @@ module MNTZorro_v0_1_S00_AXI
   reg z2_lds;
 
   reg [31:0] z3_ram_low  ;//= 32'h50000000;
+  reg [31:0] z3_fast_low ;
   reg [31:0] z3_ram_high ;//= 32'h50000000 + `Z3_RAM_SIZE -4;
+  reg [31:0] z3_fast_high;
   reg [31:0] z3_reg_low  ;//= 32'h50001000;
   reg [31:0] z3_reg_high ;//= 32'h50002000;
   reg [15:0] data_z3_hi16;
   reg [15:0] data_z3_low16;
+  reg z3_curpic;
   
   (* mark_debug = "true" *) reg [15:0] data_z3_hi16_latched;
   (* mark_debug = "true" *) reg [15:0] data_z3_low16_latched;
@@ -816,7 +820,7 @@ module MNTZorro_v0_1_S00_AXI
     endcase
     
     z3addr2 <= {ZORRO_DATA_IN[15:8],ZORRO_ADDR_IN[22:1],2'b00};
-    z3addr_in_ram <= (z3addr >= z3_ram_low) && (z3addr < z3_ram_high);
+    z3addr_in_ram <= ((z3addr >= z3_ram_low) && (z3addr < z3_ram_high) || (z3addr >= z3_fast_low) && (z3addr < z3_fast_high));
     z3addr_in_reg <= (z3addr >= z3_reg_low) && (z3addr < z3_reg_high);
     
     z3_ds0 <= ~znDS0_sync[1];
@@ -1411,6 +1415,7 @@ module MNTZorro_v0_1_S00_AXI
           zorro_ram_write_request <= 0;
           zorro_ram_read_flag <= 0;
           zorro_ram_write_flag <= 0;
+          z3_curpic <= 0;
           
           videocap_mode_in <= 0;
           videocap_pitch <= 720; // FIXME?
@@ -1460,13 +1465,37 @@ module MNTZorro_v0_1_S00_AXI
           last_z3addr <= z3addr;
           
           case (z3addr[15:0])
-            'h0000: data_z3_hi16 <= 'b1000_1111_1111_1111; // zorro 3 (10), no pool link (0), autoboot ROM (1)
-            'h0100: data_z3_hi16 <= 'b0100_1111_1111_1111; // next board unrelated (0), 256MB 1024MB fixme
+            'h0000: begin
+              if (!z3_curpic) begin
+                data_z3_hi16 <= 'b1000_1111_1111_1111; // zorro 3 (10), no pool link (0), autoboot ROM (0)
+              end else begin
+                data_z3_hi16 <= 'b1010_1111_1111_1111; // zorro 3 (10), pool link (2), autoboot ROM (0)
+              end
+            end
+            'h0100: begin
+              if (!z3_curpic) begin
+                data_z3_hi16 <= 'b1011_1111_1111_1111; // next board related (1), 256MB 1024MB fixme
+              end else begin
+                data_z3_hi16 <= 'b0100_1111_1111_1111; // next board unrelated (0), 256MB 1024MB fixme
+              end
+            end
             
             'h0004: data_z3_hi16 <= 'b1111_1111_1111_1111; // product number
-            'h0104: data_z3_hi16 <= 'b1011_1111_1111_1111; // (4)
+            'h0104: begin
+              if (!z3_curpic) begin
+                data_z3_hi16 <= 'b1011_1111_1111_1111; // 4 for the ZZ9000 RTG PIC
+              end else begin
+                data_z3_hi16 <= 'b1010_1111_1111_1111; // 5 for the 256MB Z3 Fast
+              end
+            end
             
-            'h0008: data_z3_hi16 <= 'b0000_1111_1111_1111; // flags inverted 0111 io,shutup,extension,reserved(1)
+            'h0008: begin
+              if (!z3_curpic) begin
+                data_z3_hi16 <= 'b0000_1111_1111_1111; // flags inverted 1111 io,shutup,extension,reserved(1)
+              end else begin
+                data_z3_hi16 <= 'b1000_1111_1111_1111; // flags inverted 0111 io,shutup,extension,reserved(1)
+              end
+            end
             'h0108: data_z3_hi16 <= 'b1111_1111_1111_1111; // inverted zero
             
             'h000c: data_z3_hi16 <= 'b1111_1111_1111_1111; // reserved?
@@ -1501,7 +1530,11 @@ module MNTZorro_v0_1_S00_AXI
             zorro_state <= Z3_DTACK;
             casex (z3addr[15:0])
               'hXX44: begin
-                z3_ram_low[31:16] <= z3_din_high_s2;
+                if (!z3_curpic) begin
+                  z3_ram_low[31:16] <= z3_din_high_s2;
+                end else begin
+                  z3_fast_low[31:16] <= z3_din_high_s2;
+                end
                 z_confout <= 1;
                 z3_confdone <= 1;
               end
@@ -1555,11 +1588,21 @@ module MNTZorro_v0_1_S00_AXI
           reg_low <= ram_low + 'h1000;
           reg_high <= ram_low + 'h2000;
           
-          z3_ram_high  <= z3_ram_low + `Z3_RAM_SIZE;
+          z3_ram_high  <= z3_ram_low + `Z3_SIZE_128MB;
+          z3_fast_high  <= z3_fast_low + `Z3_SIZE_256MB;
           z3_reg_low   <= z3_ram_low + 'h1000;
           z3_reg_high  <= z3_ram_low + 'h2000;
-          
-          zorro_state <= CONFIGURED_CLEAR;
+
+          if (!z3_curpic) begin
+            z3_curpic <= 1'b1;
+            z3_confdone <= 0;
+            z_confout <= 0;
+            zorro_state <= Z3_CONFIGURING;
+          end else begin
+            z3_curpic <= 1'b0;
+            z_confout <= 1;
+            zorro_state <= CONFIGURED_CLEAR;
+          end
         end
         
         CONFIGURED_CLEAR: begin
@@ -1861,7 +1904,7 @@ module MNTZorro_v0_1_S00_AXI
         
         Z3_IDLE: begin
           read_counter <= 0;
-          
+
           if (z3_fcs_state==0) begin
             // falling edge of /FCS
             
