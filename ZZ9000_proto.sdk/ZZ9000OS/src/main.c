@@ -1268,7 +1268,6 @@ int main() {
 					// cursor offset support for p96 split screen
 					sprite_x_offset = rect_x1;
 					sprite_y_offset = rect_y1;
-					printf("sprite xo: %d yo: %d\n",sprite_x_offset,sprite_y_offset);
 
 					break;
 
