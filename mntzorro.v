@@ -756,7 +756,7 @@ module MNTZorro_v0_1_S00_AXI
 `ifdef VARIANT_FW20
     assign arm_interrupt = zorro_ram_write_request | zorro_ram_read_request;
 `else
-    assign arm_interrupt = video_control_vblank_in[0] | video_control_vblank_in[1];
+    assign arm_interrupt = video_control_vblank_in[1];
 `endif
   // -- synchronizers ------------------------------------------
   always @(posedge S_AXI_ACLK) begin

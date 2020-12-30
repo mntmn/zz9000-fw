@@ -231,10 +231,8 @@ XAxiVdma vdma;
 u32* framebuffer = 0;
 u32 bgbuf_offset = 0;
 
-uint16_t split_pos = 0, old_split_pos = 0;
+uint16_t split_pos = 0, next_split_pos = 0;
 u32 framebuffer_pan_offset = 0;
-u32 framebuffer_pan_offset_old = 0;
-u32 request_video_align = 0;
 static u32 blitter_dst_offset = 0;
 static u32 blitter_src_offset = 0;
 static u32 vmode_hsize = 800, vmode_vsize = 600, vmode_hdiv = 1, vmode_vdiv = 2;
@@ -403,106 +401,14 @@ void fb_fill(uint32_t offset) {
 
 static XClk_Wiz clkwiz;
 
-void pixelclock_init(int mhz) {
-	XClk_Wiz_Config conf;
-	XClk_Wiz_CfgInitialize(&clkwiz, &conf, XPAR_CLK_WIZ_0_BASEADDR);
-
-	u32 phase = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x20C);
-	u32 duty = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x210);
-	u32 divide = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x208);
-	u32 muldiv = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200);
-
-	u32 mul = 11;
-	u32 div = 1;
-	u32 otherdiv = 11;
-
-	// Multiply/divide 100mhz fabric clock to desired pixel clock
-	// Max multiplier is 64
-	// Max div is 56
-	// Max otherdiv is 128
-
-	switch (mhz) {
-		case 50:
-			mul = 15;
-			div = 1;
-			otherdiv = 30;
-			break;
-		case 40:
-			mul = 14;
-			div = 1;
-			otherdiv = 35;
-			break;
-		case 75:
-			mul = 15;
-			div = 1;
-			otherdiv = 20;
-			break;
-		case 65:
-			mul = 13;
-			div = 1;
-			otherdiv = 20;
-			break;
-		case 27:
-			// Ever so slightly off from the exact PAL Amiga refresh rate, causes one
-			// frame tear every minute or two.
-			// 45 / 2 / 83  = 27.1084 MHz = 49.92 Hz
-			mul = 45;
-			div = 2;
-			otherdiv = 83;
-			// Slightly faster than the exact PAL Amiga refresh rate, causes one
-			// duplicated frame every ~45 seconds.
-			// 64 / 2 / 118 = 27.1186 MHz = 49.94 Hz
-			//mul = 45;
-			//div = 2;
-			//otherdiv = 83;
-			break;
-		case 54:
-			mul = 27;
-			div = 1;
-			otherdiv = 50;
-			break;
-		case 150:
-			mul = 15;
-			div = 1;
-			otherdiv = 10;
-			break;
-		case 25: // 25.205
-			mul = 15;
-			div = 1;
-			otherdiv = 60;
-			break;
-		case 108:
-			mul = 54;
-			div = 5;
-			otherdiv = 10;
-			break;
-	}
-
-	XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200, (mul << 8) | div);
-	XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR, 0x208, otherdiv);
-
-	// load configuration
-	XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR, 0x25C, 0x00000003);
-	//XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR,  0x25C, 0x00000001);
-
-	phase = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x20C);
-	//printf("CLK phase: %lu\n", phase);
-	duty = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x210);
-	//printf("CLK duty: %lu\n", duty);
-	divide = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x208);
-	//printf("CLK divide: %lu\n", divide);
-	muldiv = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200);
-	//printf("CLK muldiv: %lu\n", muldiv);
-}
-
 void pixelclock_init_2(struct zz_video_mode *mode) {
 	XClk_Wiz_Config conf;
 	XClk_Wiz_CfgInitialize(&clkwiz, &conf, XPAR_CLK_WIZ_0_BASEADDR);
 
-	u32 phase = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x20C);
+	/*u32 phase = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x20C);
 	u32 duty = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x210);
 	u32 divide = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x208);
-	u32 muldiv = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200);
+	u32 muldiv = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200);*/
 
 	u32 mul = mode->mul;
 	u32 div = mode->div;
@@ -515,14 +421,14 @@ void pixelclock_init_2(struct zz_video_mode *mode) {
 	XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR, 0x25C, 0x00000003);
 	//XClk_Wiz_WriteReg(XPAR_CLK_WIZ_0_BASEADDR,  0x25C, 0x00000001);
 
-	phase = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x20C);
+	/*phase = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x20C);
 	//printf("CLK phase: %lu\n", phase);
 	duty = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x210);
 	//printf("CLK duty: %lu\n", duty);
 	divide = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x208);
 	//printf("CLK divide: %lu\n", divide);
 	muldiv = XClk_Wiz_ReadReg(XPAR_CLK_WIZ_0_BASEADDR, 0x200);
-	//printf("CLK muldiv: %lu\n", muldiv);
+	//printf("CLK muldiv: %lu\n", muldiv);*/
 }
 
 // FIXME!
@@ -584,49 +490,10 @@ void video_formatter_init(int scalemode, int colormode, int width, int height,
 	video_formatter_valign();
 }
 
-void video_system_init(int hres, int vres, int htotal, int vtotal, int mhz,
-		int vhz, int hdiv, int vdiv, int hdmi) {
-
-	/*printf("VSI: %d x %d [%d x %d] %d MHz %d Hz, hdiv: %d vdiv: %d\n", hres,
-			vres, htotal, vtotal, mhz, vhz, hdiv, vdiv);*/
-
-	//printf("pixelclock_init()...\n");
-	pixelclock_init(mhz);
-	//printf("...done.\n");
-
-	//printf("hdmi_set_video_mode()...\n");
-	//hdmi_set_video_mode(hres, vres, mhz, vhz, hdmi);
-
-	//printf("hdmi_ctrl_init()...\n");
-	hdmi_ctrl_init();
-
-	//printf("init_vdma()...\n");
-	init_vdma(hres, vres, hdiv, vdiv, (u32)framebuffer + framebuffer_pan_offset);
-	//printf("...done.\n");
-
-	//dump_vdma_status(&vdma);
-}
-
-void video_system_init_2(struct zz_video_mode *mode, int hdiv, int vdiv) {
-
-	/*printf("VSI: %d x %d [%d x %d] %d MHz %d Hz, hdiv: %d vdiv: %d\n", mode->hres,
-			mode->vres, mode->hmax, mode->vmax, mode->mhz, mode->vhz, hdiv, vdiv);*/
-
-	//printf("pixelclock_init()...\n");
+void video_system_init(struct zz_video_mode *mode, int hdiv, int vdiv) {
 	pixelclock_init_2(mode);
-	//printf("...done.\n");
-
-	//printf("hdmi_set_video_mode()...\n");
-	//hdmi_set_video_mode(hres, vres, mhz, vhz, hdmi);
-
-	//printf("hdmi_ctrl_init()...\n");
 	hdmi_ctrl_init();
-
-	//printf("init_vdma()...\n");
 	init_vdma(mode->hres, mode->vres, hdiv, vdiv, (u32)framebuffer + framebuffer_pan_offset);
-	//printf("...done.\n");
-
-	//dump_vdma_status(&vdma);
 }
 
 // Our address space is relative to the autoconfig base address (for example, it could be 0x600000)
@@ -654,10 +521,7 @@ void video_mode_init(int mode, int scalemode, int colormode) {
 
 	struct zz_video_mode *vmode = &preset_video_modes[mode];
 
-	video_system_init_2(vmode, hdiv, vdiv);
-	/*video_system_init(vmode->hres, vmode->vres, vmode->hmax,
-			vmode->vmax, vmode->mhz, vmode->vhz,
-			hdiv, vdiv, vmode->hdmi);*/
+	video_system_init(vmode, hdiv, vdiv);
 
 	video_formatter_init(scalemode, colormode,
 			vmode->hres, vmode->vres,
@@ -674,7 +538,7 @@ void video_mode_init(int mode, int scalemode, int colormode) {
 
 int16_t sprite_x = 0, sprite_x_adj = 0, sprite_x_base = 0;
 int16_t sprite_y = 0, sprite_y_adj = 0, sprite_y_base = 0;
-int16_t sprite_x_offset = 2; // TODO figure this out for good
+int16_t sprite_x_offset = 0;
 int16_t sprite_y_offset = 0;
 
 uint16_t sprite_enabled = 0;
@@ -733,7 +597,7 @@ void sprite_reset() {
 }
 
 void update_hw_sprite_pos(int16_t x, int16_t y) {
-	sprite_x = x + sprite_x_offset;
+	sprite_x = x + sprite_x_offset + 1;
 	// horizontally doubled mode
 	if (scalemode & 1)
 		sprite_x_adj = (sprite_x * 2) + 1;
@@ -819,28 +683,34 @@ void isr0 (void *intc_inst_ptr) {
 
 	int videocap_enabled = (zstate & (1 << 23));
 	int vblank = (zstate & (1 << 21));
-	int hblank = (zstate & (1 << 20));
 
+	// videocap vdma handling is still in main loop
 	if (!videocap_enabled) {
-		if (hblank && split_pos != 0) {
-			init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv, (u32)framebuffer + bgbuf_offset);
-		}
-		if (vblank && (split_pos != 0 || (split_pos == 0 && old_split_pos != 0)))  {
+		if (!vblank) {
+			// if this is not the vblank interrupt, set up the split buffer
+			// TODO: VDMA doesn't seem to like switching buffers in the middle of a frame.
+			// the first line after a switch contains an extraneous word, so we end up
+			// with up to 4 pixels of the other buffer in the first line
+			if (split_pos != 0) {
+				init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv, (u32)framebuffer + bgbuf_offset);
+			}
+		} else {
+			// if this is the vblank interrupt, set up the "normal" buffer
 			init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv, (u32)framebuffer + framebuffer_pan_offset);
-			if (old_split_pos != 0)
-				old_split_pos = 0;
+
+			split_pos = next_split_pos;
 		}
 	}
 
 	// flush the data caches synchronized to full frames
 	if (!vblank || (split_pos == 0)) {
-		if (isr_flush_count > 0) {
+		//if (isr_flush_count > 0) {
 			Xil_L1DCacheFlush();
 			Xil_L2CacheFlush();
 			isr_flush_count = 0;
-		} else {
-			isr_flush_count++;
-		}
+		//} else {
+		//	isr_flush_count++;
+		//}
 	}
 }
 
@@ -1163,18 +1033,12 @@ int main() {
 	asm("sev");
 	printf("core1 now idling.\n");
 
-	int cache_counter = 0;
 	int videocap_enabled_old = 1;
 	int colormode = 0;
-	framebuffer_pan_offset_old = framebuffer_pan_offset;
 	video_mode = 0x2200;
 
 	int backlog_nag_counter = 0;
 	int interrupt_enabled = 0;
-
-	request_video_align = 0;
-	int vblank = 0;
-	int frfb = 0;
 
 	int custom_video_mode = ZZVMODE_CUSTOM;
 	int custom_vmode_param = VMODE_PARAM_HRES;
@@ -1259,12 +1123,6 @@ int main() {
 				case REG_ZZ_PAN_LO:
 					framebuffer_pan_offset |= zdata;
 
-					if (framebuffer_pan_offset != framebuffer_pan_offset_old) {
-						// VDMA will be reinitialized on the next vertical blank
-						request_video_align = 1;
-						framebuffer_pan_offset_old = framebuffer_pan_offset;
-					}
-
 					// cursor offset support for p96 split screen
 					sprite_x_offset = rect_x1;
 					sprite_y_offset = rect_y1;
@@ -1303,6 +1161,7 @@ int main() {
 					video_mode_init(mode, scalemode, colormode);
 					// remember selected video mode
 					video_mode = zdata;
+					//request_video_align = 1;
 					break;
 				}
 				case REG_ZZ_VCAP_MODE:
@@ -1608,8 +1467,7 @@ int main() {
 
 				case REG_ZZ_SET_SPLIT_POS:
 					bgbuf_offset = blitter_src_offset;
-					old_split_pos = split_pos;
-					split_pos = zdata;
+					next_split_pos = zdata;
 
 					video_formatter_write(split_pos, MNTVF_OP_REPORT_LINE);
 					break;
@@ -1619,11 +1477,12 @@ int main() {
 					ethernet_send_result = ethernet_send_frame(zdata);
 					//printf("SEND frame sz: %ld res: %d\n",zdata,ethernet_send_result);
 					break;
-				case REG_ZZ_ETH_RX:
+				case REG_ZZ_ETH_RX: {
 					//printf("RECV eth frame sz: %ld\n",zdata);
-					frfb=ethernet_receive_frame();
+					int frfb = ethernet_receive_frame();
 					mntzorro_write(MNTZ_BASE_ADDR, MNTZORRO_REG4, frfb);
 					break;
+				}
 				case REG_ZZ_ETH_MAC_HI: {
 					uint8_t* mac = ethernet_get_mac_address_ptr();
 					mac[0] = (zdata & 0xff00) >> 8;
@@ -1944,9 +1803,6 @@ int main() {
 					init_vdma(vmode_hsize, vmode_vsize, 1, vmode_vdiv, (u32)framebuffer + framebuffer_pan_offset);
 					video_formatter_valign();
 					printf("videocap interlace mode changed to %d.\n", interlace);
-
-					// avoid multiple video re-alignments in the same cycle
-					request_video_align = 0;
 				}
 				interlace_old = interlace;
 			}
@@ -1965,15 +1821,6 @@ int main() {
 			if (zstate == 0) {
 				// RESET
 				handle_amiga_reset();
-			}
-		}
-
-		// re-init VDMA if requested
-		vblank = (zstate_raw & (1<<21));
-		if (vblank) {
-			if (request_video_align) {
-				request_video_align = 0;
-				init_vdma(vmode_hsize, vmode_vsize, vmode_hdiv, vmode_vdiv, (u32)framebuffer + framebuffer_pan_offset);
 			}
 		}
 

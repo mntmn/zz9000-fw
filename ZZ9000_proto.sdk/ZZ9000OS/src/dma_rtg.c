@@ -15,7 +15,7 @@ extern int16_t sprite_x, sprite_x_adj, sprite_x_base;
 extern int16_t sprite_y, sprite_y_adj, sprite_y_base;
 extern int16_t sprite_x_offset;
 extern int16_t sprite_y_offset;
-extern uint16_t split_pos, old_split_pos;
+extern uint16_t split_pos, next_split_pos;
 extern uint16_t sprite_enabled;
 extern uint8_t sprite_width;
 extern uint8_t sprite_height;
@@ -250,19 +250,13 @@ void handle_blitter_dma_op(uint16_t zdata)
             sprite_y_offset = (int16_t)data->y[0];
 
             framebuffer_pan_offset = data->offset[0];
-            if (framebuffer_pan_offset != framebuffer_pan_offset_old) {
-                // VDMA will be reinitialized on the next vertical blank
-                request_video_align = 1;
-                framebuffer_pan_offset_old = framebuffer_pan_offset;
-            }
             break;
         
         case OP_SET_SPLIT_POS:
             SWAP16(data->y[0]);
             SWAP32(data->offset[0]);
             bgbuf_offset = data->offset[0];
-            old_split_pos = split_pos;
-            split_pos = data->y[0];
+            next_split_pos = data->y[0];
 
             video_formatter_write(data->y[0], MNTVF_OP_REPORT_LINE);
             break;

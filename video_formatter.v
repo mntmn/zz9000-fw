@@ -126,6 +126,7 @@ reg [11:0] sprite_py; // vga domain
 reg [23:0] sprite_pix; // vga domain
 reg sprite_on; // vga domain
 reg [11:0] vga_report_y; // vga domain
+reg [11:0] vga_report_y_next; // vga domain
 
 always @(posedge m_axis_vid_aclk)
   begin
@@ -292,6 +293,7 @@ reg [11:0] vga_h_rez_shifted;
 reg [11:0] vga_v_rez_shifted;
 
 reg vga_scale_x = 0;
+reg vga_scale_y = 0;
 reg [31:0] pixout;
 reg [7:0]  pixout8;
 reg [15:0] pixout16;
@@ -320,6 +322,7 @@ always @(posedge dvi_clk) begin
   vga_v_sync_start <= screen_v_sync_start;
   vga_v_sync_end <= screen_v_sync_end;
   vga_scale_x <= scale_x;
+  vga_scale_y <= scale_y;
   vga_colormode <= colormode;
   vga_sync_polarity <= sync_polarity;
   if (counter_y == 0) begin
@@ -329,12 +332,7 @@ always @(posedge dvi_clk) begin
   vga_sprite_x2 <= vga_sprite_x+(SPRITE_W<<sprite_dbl);
   vga_sprite_y2 <= vga_sprite_y+(SPRITE_H<<sprite_dbl);
   vga_sprite_dbl <= sprite_dbl;
-  vga_report_y <= report_y;
-  
-  // FIXME there is some non-determinism in the relationship
-  // between this process and the fetching process
-  // depending on when a new screen is launched, there can be
-  // 1 row of wrap-around
+  vga_report_y_next <= report_y;
   
   /*
     pipelines (4 clocks):
@@ -453,34 +451,41 @@ always @(posedge dvi_clk) begin
     need_frame_sync <= 1;
   else
     need_frame_sync <= 0;
+    
+  // rasterline interrupt:
+  // - first time on vblank start (1 pixel long)
+  // - second time on report_y (1 pixel long)
+  if (counter_y == vga_v_sync_start || (vga_report_y != 0 && (counter_y == vga_report_y - 1'b1))) begin
+    // i tested the position of the interrupt relative to vdma_init,
+    // there's a wide window where a buffer switch is ok, and
+    // another window in which we get a line that flickers in the middle.
+    if (counter_x == vga_h_rez)
+      control_vblank[1] <= 1;
+    else
+      control_vblank[1] <= 0;
+  end
   
   if (counter_x >= vga_h_rez && counter_x < vga_h_max) begin
     dvi_hsync <= 1^vga_sync_polarity;
-    if (vga_report_y != 0 && counter_y == vga_report_y - 1'b1 && !control_vblank[1])
-      control_vblank[1] <= 1;
-    else begin
-      if (vga_report_y != 0 && control_vblank[1]) begin
-        if (counter_y > vga_report_y + 1'b1)
-          control_vblank[1] <= 0;
-      end
-    end
   end else
     dvi_hsync <= 0^vga_sync_polarity;
     
   if (counter_y >= vga_v_sync_start && counter_y < vga_v_max) begin
     dvi_vsync <= 1^vga_sync_polarity;
-    if (!control_vblank[0])
-      control_vblank[0] <= 1;
+    control_vblank[0] <= 1;
+    // propagate report (interrupt) line position in vblank
+    // to avoid glitches
+    vga_report_y <= vga_report_y_next;
   end
   else begin
     dvi_vsync <= 0^vga_sync_polarity;
-    if (control_vblank[0])
-      control_vblank[0] <= 0;
+    control_vblank[0] <= 0;
   end
   // 4 clocks pipeline delay
   vga_h_rez_shifted <= vga_h_rez+4;
   
-  if (counter_y<vga_v_rez && counter_x==4)
+  // account for 1 line of vdma wrap-around
+  if (counter_y>vga_scale_y && counter_y<=(vga_v_rez + vga_scale_y) && counter_x==4)
     dvi_active_video <= 1;
     
   if (counter_x==vga_h_rez_shifted)
