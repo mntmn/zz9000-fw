@@ -1588,6 +1588,7 @@ module MNTZorro_v0_1_S00_AXI
           reg_low <= ram_low + 'h1000;
           reg_high <= ram_low + 'h2000;
           
+`ifdef ZORRO3
           z3_ram_high  <= z3_ram_low + `Z3_SIZE_128MB;
           z3_fast_high  <= z3_fast_low + `Z3_SIZE_256MB;
           z3_reg_low   <= z3_ram_low + 'h1000;
@@ -1603,6 +1604,9 @@ module MNTZorro_v0_1_S00_AXI
             z_confout <= 1;
             zorro_state <= CONFIGURED_CLEAR;
           end
+`else
+          zorro_state <= CONFIGURED_CLEAR;
+`endif
         end
         
         CONFIGURED_CLEAR: begin
