@@ -4,7 +4,7 @@
 #include "xil_printf.h"
 
 extern u32* framebuffer;
-extern u32* bgbuf_offset;
+extern u32 bgbuf_offset;
 extern u32 framebuffer_pan_offset;
 extern u32 framebuffer_pan_offset_old;
 extern u32 request_video_align;
@@ -260,8 +260,7 @@ void handle_blitter_dma_op(uint16_t zdata)
         case OP_SET_SPLIT_POS:
             SWAP16(data->y[0]);
             SWAP32(data->offset[0]);
-            data->offset[0] += ADDR_ADJ;
-            bgbuf_offset = (uint32_t *)(data->offset[0] & 0x0FFFFFFF);
+            bgbuf_offset = data->offset[0];
             old_split_pos = split_pos;
             split_pos = data->y[0];
 
