@@ -635,7 +635,7 @@ void video_system_init_2(struct zz_video_mode *mode, int hdiv, int vdiv) {
 #define MNT_FB_BASE     			0x010000
 
 #define REVISION_MAJOR 1
-#define REVISION_MINOR 7
+#define REVISION_MINOR 8
 
 int scalemode = 0;
 
@@ -674,7 +674,7 @@ void video_mode_init(int mode, int scalemode, int colormode) {
 
 int16_t sprite_x = 0, sprite_x_adj = 0, sprite_x_base = 0;
 int16_t sprite_y = 0, sprite_y_adj = 0, sprite_y_base = 0;
-int16_t sprite_x_offset = 0;
+int16_t sprite_x_offset = 2; // TODO figure this out for good
 int16_t sprite_y_offset = 0;
 
 uint16_t sprite_enabled = 0;
@@ -736,9 +736,9 @@ void update_hw_sprite_pos(int16_t x, int16_t y) {
 	sprite_x = x + sprite_x_offset;
 	// horizontally doubled mode
 	if (scalemode & 1)
-		sprite_x_adj = (sprite_x * 2) + 2; // FIXME adjusted during A500 tests by mntmn, was +1
+		sprite_x_adj = (sprite_x * 2) + 1;
 	else
-		sprite_x_adj = sprite_x + 4; // FIXME adjusted during A500 tests by mntmn, was +2
+		sprite_x_adj = sprite_x + 2;
 
 	sprite_y = y + split_pos + sprite_y_offset + 1;
 
