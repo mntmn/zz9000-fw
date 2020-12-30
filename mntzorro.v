@@ -43,11 +43,11 @@
 `define Z3_SIZE_256MB 32'h10000000 // 256MB for Zorro 3
 `define ARM_MEMORY_START 32'h001f0000
 `define VIDEOCAP_ADDR 32'h01000000 // ARM_MEMORY_START+0xe0_0000
-`define TX_FRAME_ADDRESS 32'h0fd10000
-`define RX_FRAME_ADDRESS 32'h0fd20000
-`define RX_BACKLOG_ADDRESS 32'h0fe00000
-`define FRAME_SIZE 24'h2048
-`define USB_BLOCK_STORAGE_ADDRESS 32'h0fe10000
+`define TX_FRAME_ADDRESS 32'h3fd10000 // ethernet tx buffer
+`define RX_FRAME_ADDRESS 32'h3fd20000 // ethernet rx buffer
+`define RX_BACKLOG_ADDRESS 32'h3fe00000 // ethernet rx buffer
+`define FRAME_SIZE 24'h2048 // max ethernet frame size
+`define USB_BLOCK_STORAGE_ADDRESS 32'h3fe10000
 
 `define C_M00_AXI_TARGET_SLAVE_BASE_ADDR 32'h10000000
 `define C_M00_AXI_ID_WIDTH   1
