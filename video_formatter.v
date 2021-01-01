@@ -465,22 +465,27 @@ always @(posedge dvi_clk) begin
       control_vblank[1] <= 0;
   end
   
-  if (counter_x >= vga_h_rez && counter_x < vga_h_max) begin
-    dvi_hsync <= 1^vga_sync_polarity;
-  end else
-    dvi_hsync <= 0^vga_sync_polarity;
-    
-  if (counter_y >= vga_v_sync_start && counter_y < vga_v_max) begin
-    dvi_vsync <= 1^vga_sync_polarity;
+  // internal vblank signal
+  if (counter_y >= vga_v_rez && counter_y < vga_v_max) begin
     control_vblank[0] <= 1;
     // propagate report (interrupt) line position in vblank
     // to avoid glitches
     vga_report_y <= vga_report_y_next;
-  end
-  else begin
-    dvi_vsync <= 0^vga_sync_polarity;
+  end else begin
     control_vblank[0] <= 0;
   end
+  
+  if (counter_x >= vga_h_sync_start && counter_x < vga_h_sync_end) begin
+    dvi_hsync <= 1^vga_sync_polarity;
+  end else
+    dvi_hsync <= 0^vga_sync_polarity;
+    
+  if (counter_y >= vga_v_sync_start && counter_y < vga_v_sync_end) begin
+    dvi_vsync <= 1^vga_sync_polarity;
+  end else begin
+    dvi_vsync <= 0^vga_sync_polarity;
+  end
+  
   // 4 clocks pipeline delay
   vga_h_rez_shifted <= vga_h_rez+4;
   
