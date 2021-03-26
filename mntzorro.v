@@ -27,7 +27,7 @@
 //`define VARIANT_2MB           // uses only 2MB address space
 //`define VARIANT_SUPERDENISE   // for A500+ and super denise
 
-//`define VARIANT_FW20
+`define VARIANT_FW20
 
 `define C_S_AXI_DATA_WIDTH 32
 `define C_S_AXI_ADDR_WIDTH 5
@@ -39,6 +39,7 @@
 `define REG_SIZE 32'h01000
 `define AUTOCONF_LOW  24'he80000
 `define AUTOCONF_HIGH 24'he80080
+`define Z3_SIZE_64MB 32'h04000000
 `define Z3_SIZE_128MB 32'h08000000
 `define Z3_SIZE_256MB 32'h10000000 // 256MB for Zorro 3
 `define ARM_MEMORY_START 32'h001f0000
@@ -820,7 +821,11 @@ module MNTZorro_v0_1_S00_AXI
     endcase
     
     z3addr2 <= {ZORRO_DATA_IN[15:8],ZORRO_ADDR_IN[22:1],2'b00};
+`ifndef VARIANT_FW20
     z3addr_in_ram <= ((z3addr >= z3_ram_low) && (z3addr < z3_ram_high) || (z3addr >= z3_fast_low) && (z3addr < z3_fast_high));
+`else
+    z3addr_in_ram <= (z3addr >= z3_ram_low) && (z3addr < z3_ram_high);
+`endif
     z3addr_in_reg <= (z3addr >= z3_reg_low) && (z3addr < z3_reg_high);
     
     z3_ds0 <= ~znDS0_sync[1];
@@ -964,6 +969,7 @@ module MNTZorro_v0_1_S00_AXI
   
   reg videocap_mode;
   reg videocap_mode_in;
+  reg [31:0] videocap_address = `VIDEOCAP_ADDR; 
   (* mark_debug = "true" *) reg [6:0] videocap_hs;
   (* mark_debug = "true" *) reg [6:0] videocap_vs;
   reg [23:0] videocap_rgbin = 0;
@@ -1332,7 +1338,7 @@ module MNTZorro_v0_1_S00_AXI
       //m01_axi_wvalid_out  <= 0;
       //m01_axi_awvalid_out <= 0;
     end else begin
-      m01_axi_awaddr_out  <= `VIDEOCAP_ADDR+vc_saveaddr2;
+      m01_axi_awaddr_out  <= videocap_address+vc_saveaddr2;
       m01_axi_wdata_out   <= videocap_buf[videocap_save_x];
   
       // one-hot encoded
@@ -1388,10 +1394,10 @@ module MNTZorro_v0_1_S00_AXI
   always @(posedge S_AXI_ACLK) begin
     zorro_idle <= ((zorro_state==Z2_IDLE)||(zorro_state==Z3_IDLE));
     
-`ifndef VARIANT_FW20
+//`ifndef VARIANT_FW20
     // FIXME videocap disabled for FW20
     videocap_mode <= videocap_mode_in;
-`endif
+//`endif
     
     if (/*z_cfgin_lo ||*/ z_reset) begin
       zorro_state <= RESET;
@@ -1418,7 +1424,7 @@ module MNTZorro_v0_1_S00_AXI
           z3_curpic <= 0;
           
           videocap_mode_in <= 0;
-          videocap_pitch <= 720; // FIXME?
+          videocap_pitch <= 720; // FIXME? (was 720)
           
           if (!z_reset)
             zorro_state <= DECIDE_Z2_Z3;
@@ -1474,9 +1480,13 @@ module MNTZorro_v0_1_S00_AXI
             end
             'h0100: begin
               if (!z3_curpic) begin
-                data_z3_hi16 <= 'b1011_1111_1111_1111; // next board related (1), 256MB 1024MB fixme
+`ifndef VARIANT_FW20
+                data_z3_hi16 <= 'b1011_1111_1111_1111; // next board related (1), 128MB
+`else
+                data_z3_hi16 <= 'b0010_1111_1111_1111; // FW20: next board unrelated (0), 64MB
+`endif
               end else begin
-                data_z3_hi16 <= 'b0100_1111_1111_1111; // next board unrelated (0), 256MB 1024MB fixme
+                data_z3_hi16 <= 'b0100_1111_1111_1111; // next board unrelated (0), 256MB
               end
             end
             
@@ -1589,11 +1599,13 @@ module MNTZorro_v0_1_S00_AXI
           reg_high <= ram_low + 'h2000;
           
 `ifdef ZORRO3
-          z3_ram_high  <= z3_ram_low + `Z3_SIZE_128MB;
+          z3_ram_high  <= z3_ram_low + `Z3_SIZE_64MB;
           z3_fast_high  <= z3_fast_low + `Z3_SIZE_256MB;
           z3_reg_low   <= z3_ram_low + 'h1000;
           z3_reg_high  <= z3_ram_low + 'h2000;
 
+
+`ifndef VARIANT_FW20
           if (!z3_curpic) begin
             z3_curpic <= 1'b1;
             z3_confdone <= 0;
@@ -1604,6 +1616,13 @@ module MNTZorro_v0_1_S00_AXI
             z_confout <= 1;
             zorro_state <= CONFIGURED_CLEAR;
           end
+`else
+          z3_curpic <= 1'b0;
+          z_confout <= 1;
+          zorro_state <= CONFIGURED_CLEAR;
+`endif
+
+
 `else
           zorro_state <= CONFIGURED_CLEAR;
 `endif
@@ -1934,10 +1953,14 @@ module MNTZorro_v0_1_S00_AXI
               data_z3_low16 <= default_data;
               slaven <= 1;
               
+`ifndef VARIANT_FW20
               if (z3_mapped_addr<'h2000)
                 zorro_state <= Z3_READ_UPPER;
               else
                 zorro_state <= WAIT_READ_DMA_Z3;
+`else
+                zorro_state <= Z3_READ_UPPER;
+`endif
             end else begin
               // address not recognized
               slaven <= 0;
@@ -2168,6 +2191,9 @@ module MNTZorro_v0_1_S00_AXI
             'h02: video_control_data_zorro[15:0]  <= regdata_in[15:0];
             'h04: video_control_op_zorro[7:0]     <= regdata_in[7:0]; // FIXME
             'h06: videocap_mode_in <= regdata_in[0];
+            'h10: videocap_address[31:16] <= regdata_in[15:0];
+            'h12: videocap_address[15:0] <= regdata_in[15:0];
+            'h14: videocap_pitch <= regdata_in;
             //'h20: if (regdata_in[5:0]>0) dtack_timeout <= regdata_in[5:0];
             //'h14: zorro_interrupt <= regdata_in[0];
             //'h10: E7M_PSINCDEC <= regdata_in[0];
@@ -2226,9 +2252,8 @@ module MNTZorro_v0_1_S00_AXI
     if (video_control_op == 2) begin
       // OP_DIMENSIONS = 2
       videocap_pitch_snoop <= video_control_data[11:0];
+      videocap_pitch <= videocap_pitch_snoop; // FIXME
     end
-    
-    videocap_pitch <= videocap_pitch_snoop;
     
     out_reg0 <= ZORRO3 ? last_z3addr : last_addr;
     out_reg1 <= zorro_ram_write_data;
