@@ -475,16 +475,15 @@ always @(posedge dvi_clk) begin
     control_vblank[0] <= 0;
   end
   
-  if (counter_x >= vga_h_sync_start && counter_x < vga_h_sync_end) begin
+  if (counter_x >= vga_h_sync_start && counter_x < vga_h_sync_end)
     dvi_hsync <= 1^vga_sync_polarity;
-  end else
+  else
     dvi_hsync <= 0^vga_sync_polarity;
     
-  if (counter_y >= vga_v_sync_start && counter_y < vga_v_sync_end) begin
+  if (counter_y >= vga_v_sync_start && counter_y < vga_v_sync_end)
     dvi_vsync <= 1^vga_sync_polarity;
-  end else begin
+  else
     dvi_vsync <= 0^vga_sync_polarity;
-  end
   
   // 4 clocks pipeline delay
   vga_h_rez_shifted <= vga_h_rez+4;
